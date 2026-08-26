@@ -126,3 +126,37 @@ def create_features(asset_returns: pd.DataFrame,
         features[f'beta_{factor}'] = betas[factor]
     
     return features
+
+
+# In features.py, add to create_features():
+def create_features(asset_returns: pd.DataFrame,
+                    factor_returns: pd.DataFrame,
+                    portfolio_weights: pd.DataFrame,
+                    macro_data: pd.DataFrame = None) -> pd.DataFrame:
+    """
+    Create all features for the model.
+    """
+    # Existing features...
+    betas = rolling_betas(asset_returns, factor_returns)
+    fci = factor_concentration_index(betas)
+    hhi = portfolio_hhi(portfolio_weights)
+    turnover = portfolio_weights.diff().abs().sum(axis=1)
+    
+    # Combine features
+    features = pd.DataFrame(index=asset_returns.index)
+    features['fci'] = fci
+    features['hhi'] = hhi
+    features['turnover'] = turnover
+    
+    # Add individual factor exposures
+    for factor in betas.columns:
+        features[f'beta_{factor}'] = betas[factor]
+    
+    # Add macro features if available
+    if macro_data is not None:
+        features['vix'] = macro_data['VIX'].pct_change()  # VIX changes
+        features['vix_level'] = macro_data['VIX']  # VIX level
+        
+    return features
+
+
