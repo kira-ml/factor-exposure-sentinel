@@ -23,7 +23,9 @@
 | 20:53 | Refactored models to src/models.py | ✅ | Clean architecture with ModelFactory |
 | 21:06 | Added Random Forest | ✅ | AUC 0.4937 (near random) |
 | 21:12 | Added threshold sensitivity analysis | ✅ | Found 80% overfits, 90% generalizes best |
-| 21:20 | Added VIX-enhanced threshold | ✅ | **BEST MODEL: AUC 0.5384** |
+| 21:20 | Added VIX-enhanced threshold | ✅ | AUC 0.5384 (new best) |
+| 21:43 | Added FCI Trend-Enhanced threshold | ✅ | AUC 0.5377 |
+| 21:43 | Added Combined rule (FCI + Trend + VIX) | ✅ | **AUC 0.5446 (NEW BEST!)** |
 
 ---
 
@@ -60,13 +62,15 @@
 | beta_Mkt-RF | -0.0583 |
 | beta_RMW | -0.0631 |
 
-**Model Performance:**
-| Model | AUC-ROC | F1 | Precision | Recall |
-|-------|---------|-----|-----------|--------|
-| **VIX-Enhanced Threshold** | **0.5384** | **0.1103** | 0.0741 | 0.2162 |
-| Threshold Baseline (90%) | 0.5117 | 0.0888 | 0.0537 | 0.2568 |
-| Random Forest | 0.4937 | 0.0000 | 0.0000 | 0.0000 |
-| Logistic Regression (SMOTE) | 0.3683 | 0.0579 | 0.0319 | 0.3108 |
+**Model Performance (Final):**
+| Model | AUC-ROC | F1 | Precision | Recall | Status |
+|-------|---------|-----|-----------|--------|--------|
+| **Combined (FCI + Trend + VIX)** | **0.5446** | **0.1232** | 0.0949 | 0.1757 | ⭐ **BEST** |
+| VIX-Enhanced Threshold | 0.5384 | 0.1103 | 0.0741 | 0.2162 | 2nd |
+| FCI Trend-Enhanced | 0.5377 | 0.1096 | 0.0734 | 0.2162 | 3rd |
+| Threshold Baseline (90%) | 0.5117 | 0.0888 | 0.0537 | 0.2568 | 4th |
+| Random Forest | 0.4937 | 0.0000 | 0.0000 | 0.0000 | 5th |
+| Logistic Regression (SMOTE) | 0.3683 | 0.0579 | 0.0319 | 0.3108 | Worst |
 
 **Threshold Sensitivity Analysis (Training Data):**
 | Percentile | Train AUC | Test AUC | Gap | Status |
@@ -82,13 +86,25 @@
 | 99% | 0.4947 | - | - | - |
 
 **VIX-Enhanced Threshold Results:**
-| VIX Threshold | AUC | F1 | Precision | Recall | Predictions |
-|---------------|-----|-----|-----------|--------|-------------|
-| 15 | 0.5235 | 0.0964 | 0.0594 | 0.2568 | 320 |
-| 18 | 0.5399 | 0.1095 | 0.0696 | 0.2568 | 273 |
-| **20** | **0.5384** | **0.1103** | **0.0741** | **0.2162** | **216** |
-| 22 | 0.5285 | 0.1013 | 0.0736 | 0.1622 | 163 |
-| 25 | 0.5074 | 0.0686 | 0.0594 | 0.0811 | 101 |
+| VIX Threshold | AUC | F1 | Precision | Recall | Predictions | TP |
+|---------------|-----|-----|-----------|--------|-------------|-----|
+| 15 | 0.5235 | 0.0964 | 0.0594 | 0.2568 | 320 | 19 |
+| 18 | 0.5399 | 0.1095 | 0.0696 | 0.2568 | 273 | 19 |
+| **20** | **0.5384** | **0.1103** | **0.0741** | **0.2162** | **216** | **16** |
+| 22 | 0.5285 | 0.1013 | 0.0736 | 0.1622 | 163 | 12 |
+| 25 | 0.5074 | 0.0686 | 0.0594 | 0.0811 | 101 | 6 |
+
+**FCI Trend-Enhanced Results:**
+| Rule | AUC | F1 | Precision | Recall | Predictions | TP |
+|------|-----|-----|-----------|--------|-------------|-----|
+| FCI > 90% AND FCI > MA20 | 0.5377 | 0.1096 | 0.0734 | 0.2162 | 218 | 16 |
+| **FCI > 90% AND FCI > MA20 AND VIX > 20** | **0.5446** | **0.1232** | **0.0949** | **0.1757** | **137** | **13** |
+
+**FCI Threshold Values:**
+| Metric | Value |
+|--------|-------|
+| 90th Percentile FCI | 0.5486 |
+| FCI 20-day MA (rolling) | Varies by date |
 
 ---
 
@@ -96,10 +112,12 @@
 
 1. **Target is Valid**: Events cluster around known crises (COVID: 27.7% rate, 12x normal)
 2. **VIX is Best Feature**: Correlation 0.0835 with target
-3. **FCI Works at Extreme Thresholds**: 90th percentile generalizes best
-4. **VIX-Enhanced Threshold is Best Model**: AUC 0.5384 beats all ML models
-5. **Simple Rules > Complex ML**: With current features, interpretable rules outperform ML
-6. **Class Imbalance is Extreme**: Only 2.86% events, requires special handling
+3. **FCI Works at Extreme Thresholds**: 90th percentile generalizes best (0.5486)
+4. **FCI Trend Matters**: FCI > 20-day MA captures building concentration (AUC 0.5377)
+5. **Combined Rule is Best**: FCI > 90% AND FCI > MA20 AND VIX > 20 achieves AUC 0.5446
+6. **Simple Rules > Complex ML**: With current features, interpretable rules outperform ML
+7. **Class Imbalance is Extreme**: Only 2.86% events, requires special handling
+8. **Trend + VIX Reduces False Positives**: Precision improved from 0.0537 to 0.0949
 
 ---
 
@@ -110,6 +128,8 @@
 - Logistic Regression predicts backwards (AUC < 0.5)
 - VIX filter reduces false positives during low volatility periods
 - The optimal VIX threshold is 20
+- FCI Trend + VIX combined reduces predictions from 216 to 137 (fewer false alarms)
+- Combined rule captures three signals: high concentration + increasing trend + elevated volatility
 
 ---
 
@@ -117,11 +137,12 @@
 
 | Priority | Task | Expected Impact |
 |----------|------|-----------------|
-| P0 | Add FCI trend feature (increasing concentration) | AUC > 0.55 |
-| P0 | Add VIX change as filter | AUC > 0.54 |
+| P0 | Test different rolling windows for FCI trend (10, 15, 30 days) | AUC > 0.55 |
+| P0 | Add rolling volatility features (20d, 60d) | Capture regime changes |
+| P1 | Add VIX change as additional filter | AUC > 0.55 |
 | P1 | Test FCI percentiles with VIX combinations | Find optimal combo |
-| P1 | Add rolling volatility (20d, 60d) | Capture regime changes |
 | P2 | Try XGBoost | Potential best performance |
+| P2 | Feature importance analysis across all models | Understand drivers |
 
 ---
 
@@ -135,7 +156,7 @@
 | `src/target_analysis.py` | NEW - Target validation module |
 | `src/models.py` | NEW - ModelFactory architecture |
 | `src/evaluate.py` | Evaluation metrics with output saving |
-| `main.py` | Pipeline orchestrator with all models |
+| `main.py` | Pipeline orchestrator with all models (6 models tested) |
 
 ---
 
@@ -147,6 +168,8 @@
 4. `feat: Add Random Forest model to pipeline`
 5. `feat: Add threshold sensitivity analysis`
 6. `feat: VIX-enhanced threshold is now best model (AUC: 0.5384)`
+7. `feat: Add FCI Trend-Enhanced threshold (AUC: 0.5377)`
+8. `feat: Combined rule achieves best AUC 0.5446`
 
 ---
 
@@ -212,15 +235,16 @@
 |-----------|--------|-------|
 | Data Pipeline | ✅ Complete | Caching works, all data sources connected |
 | Target Definition | ✅ Validated | Events cluster around crises |
-| Feature Engineering | ✅ Complete | VIX, FCI, betas implemented |
+| Feature Engineering | ✅ Complete | VIX, FCI, betas, trend implemented |
 | Target Analysis | ✅ Complete | Comprehensive validation done |
-| Baseline Models | ✅ Complete | Threshold, LR, RF, VIX-Enhanced |
+| Baseline Models | ✅ Complete | 6 models tested (Threshold, VIX, Trend, Combined, LR, RF) |
 | Model Architecture | ✅ Complete | Clean ModelFactory design |
 | Output Tracking | ✅ Complete | All runs saved to outputs/ |
-| Documentation | ✅ In Progress | TODO.md being maintained |
+| Documentation | ✅ Complete | TODO.md maintained with all metrics |
 
-**Current Best Model:** VIX-Enhanced Threshold (FCI > 90% AND VIX > 20)
-**Current Best AUC:** 0.5384
+**Current Best Model:** Combined Rule (FCI > 90% AND FCI > 20-day MA AND VIX > 20)
+**Current Best AUC:** 0.5446
+**Current Best F1:** 0.1232
 
 ---
 
