@@ -9,6 +9,9 @@ venv/
 data/*
 !data/.gitkeep
 
+# Evaluation outputs
+outputs/
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb

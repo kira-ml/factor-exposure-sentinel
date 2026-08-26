@@ -26,7 +26,7 @@ def rolling_betas(asset_returns: pd.DataFrame,
     
     Returns:
     --------
-    pd.DataFrame with betas for each factor
+    pd.DataFrame with betas for each factor (averaged across assets)
     """
     betas = pd.DataFrame(index=asset_returns.index, 
                         columns=factor_returns.columns)
@@ -38,7 +38,8 @@ def rolling_betas(asset_returns: pd.DataFrame,
         if len(X) == window and not np.any(np.isnan(X)) and not np.any(np.isnan(y)):
             model = LinearRegression()
             model.fit(X, y)
-            betas.iloc[i] = model.coef_
+            # Average betas across all assets
+            betas.iloc[i] = model.coef_.mean(axis=0)
     
     return betas
 
@@ -59,8 +60,12 @@ def factor_concentration_index(betas: pd.DataFrame) -> pd.Series:
     """
     numerator = (betas ** 2).sum(axis=1)
     denominator = (betas.abs().sum(axis=1)) ** 2
-    fci = numerator / denominator
-    return fci.replace([np.inf, -np.inf], np.nan).fillna(0)
+    
+    # Handle division by zero by setting FCI to 0 when denominator is 0
+    fci = numerator / denominator.replace(0, np.nan)
+    fci = fci.fillna(0)  # Fill NaN (from division by zero) with 0
+    
+    return fci
 
 def portfolio_hhi(weights: pd.DataFrame) -> pd.Series:
     """

@@ -13,11 +13,12 @@ from pathlib import Path
 from src.data_loader import fetch_all_data, fetch_etf_data, ETF_TICKERS
 from src.target import create_target
 from src.features import create_features
-from src.evaluate import evaluate_model, print_evaluation
+from src.evaluate import evaluate_model, print_evaluation, save_results
 
 # Simple Logistic Regression (no complex ML yet)
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import precision_recall_curve
 
 def main():
     print("="*60)
@@ -69,7 +70,7 @@ def main():
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    model = LogisticRegression(class_weight='balanced', random_state=42)
+    model = LogisticRegression(class_weight='balanced', random_state=42, max_iter=1000)
     model.fit(X_train_scaled, y_train)
     
     # 7. Predict and evaluate
@@ -77,7 +78,6 @@ def main():
     y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
     
     # Find optimal threshold from training data
-    from sklearn.metrics import precision_recall_curve
     precision, recall, thresholds = precision_recall_curve(y_train, 
                                                            model.predict_proba(X_train_scaled)[:, 1])
     # Use threshold that balances precision and recall
@@ -86,6 +86,15 @@ def main():
     
     results = evaluate_model(y_test, y_pred_proba, threshold=optimal_threshold)
     print_evaluation(results)
+    
+    # Save results to outputs directory
+    run_id = save_results(
+        results=results,
+        feature_names=X_train.columns.tolist(),
+        coefficients=model.coef_[0].tolist(),
+        model_name="logistic_regression"
+    )
+    print(f"   Run ID: {run_id}")
     
     # 8. Feature importance
     print("\n[8] Feature importance:")
