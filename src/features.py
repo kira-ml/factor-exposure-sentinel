@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
+
 def rolling_betas(asset_returns: pd.DataFrame, 
                   factor_returns: pd.DataFrame,
                   window: int = 252) -> pd.DataFrame:
@@ -43,6 +44,7 @@ def rolling_betas(asset_returns: pd.DataFrame,
     
     return betas
 
+
 def factor_concentration_index(betas: pd.DataFrame) -> pd.Series:
     """
     Calculate Factor Concentration Index (FCI).
@@ -67,6 +69,7 @@ def factor_concentration_index(betas: pd.DataFrame) -> pd.Series:
     
     return fci
 
+
 def portfolio_hhi(weights: pd.DataFrame) -> pd.Series:
     """
     Calculate Herfindahl-Hirschman Index for portfolio weights.
@@ -84,9 +87,11 @@ def portfolio_hhi(weights: pd.DataFrame) -> pd.Series:
     """
     return (weights ** 2).sum(axis=1)
 
+
 def create_features(asset_returns: pd.DataFrame,
                     factor_returns: pd.DataFrame,
-                    portfolio_weights: pd.DataFrame) -> pd.DataFrame:
+                    portfolio_weights: pd.DataFrame,
+                    macro_data: pd.DataFrame = None) -> pd.DataFrame:
     """
     Create all features for the model.
     
@@ -98,6 +103,8 @@ def create_features(asset_returns: pd.DataFrame,
         Factor returns
     portfolio_weights : pd.DataFrame
         Portfolio weights
+    macro_data : pd.DataFrame, optional
+        Macro data with VIX and other indicators
     
     Returns:
     --------
@@ -125,38 +132,11 @@ def create_features(asset_returns: pd.DataFrame,
     for factor in betas.columns:
         features[f'beta_{factor}'] = betas[factor]
     
-    return features
-
-
-# In features.py, add to create_features():
-def create_features(asset_returns: pd.DataFrame,
-                    factor_returns: pd.DataFrame,
-                    portfolio_weights: pd.DataFrame,
-                    macro_data: pd.DataFrame = None) -> pd.DataFrame:
-    """
-    Create all features for the model.
-    """
-    # Existing features...
-    betas = rolling_betas(asset_returns, factor_returns)
-    fci = factor_concentration_index(betas)
-    hhi = portfolio_hhi(portfolio_weights)
-    turnover = portfolio_weights.diff().abs().sum(axis=1)
-    
-    # Combine features
-    features = pd.DataFrame(index=asset_returns.index)
-    features['fci'] = fci
-    features['hhi'] = hhi
-    features['turnover'] = turnover
-    
-    # Add individual factor exposures
-    for factor in betas.columns:
-        features[f'beta_{factor}'] = betas[factor]
     
     # Add macro features if available
     if macro_data is not None:
-        features['vix'] = macro_data['VIX'].pct_change()  # VIX changes
-        features['vix_level'] = macro_data['VIX']  # VIX level
-        
+        features['vix_level'] = macro_data
+        features['vix_change'] = macro_data.pct_change()
+        features['vix_vol'] = macro_data.rolling(20).std()
+    
     return features
-
-

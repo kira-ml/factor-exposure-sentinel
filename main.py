@@ -20,6 +20,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import precision_recall_curve, accuracy_score, confusion_matrix, roc_auc_score
 from imblearn.over_sampling import SMOTE
+from src.target_analysis import analyze_target, print_target_analysis, get_analysis_summary
+
 
 
 def threshold_baseline(features, target, percentile=0.90):
@@ -122,10 +124,21 @@ def main():
     print("\n[3] Creating target variable...")
     target = create_target(portfolio_returns, factors)
     print(f"   Event rate: {target.mean():.3f} ({target.sum()} events)")
-    
+    print("\n[3b] Target analysis...")
+    target_results = analyze_target(target)
+    print_target_analysis(target_results)
+    print(f"   Summary: {get_analysis_summary(target_results)}")
+
     # 4. Create features
     print("\n[4] Creating features...")
-    features = create_features(returns[ETF_TICKERS], factors, portfolio_weights)
+    # In main.py, when calling create_features:
+    # In main.py, when calling create_features:
+    features = create_features(
+        returns[ETF_TICKERS], 
+        factors, 
+        portfolio_weights,
+        macro_data=data['vix']  # This is a Series
+    )
     features = features.drop(['hhi', 'turnover'], axis=1, errors='ignore')
 
     # Check data alignment
