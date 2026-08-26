@@ -182,7 +182,8 @@ def main():
     
     # Use 90th percentile (proven to generalize best)
     optimal_percentile = 0.90
-    print(f"\n   Using proven threshold: {optimal_percentile*100:.0f}th percentile (generalizes best)")
+    fci_threshold = features.loc[train_idx, 'fci'].quantile(0.90)
+    print(f"\n   Using proven threshold: {optimal_percentile*100:.0f}th percentile (FCI threshold: {fci_threshold:.4f})")
     
     # ============================================================
     # 7. Threshold Baseline with 90th Percentile
@@ -194,15 +195,13 @@ def main():
     print_evaluation(threshold_results)
     
     # ============================================================
-    # 8. VIX-ENHANCED THRESHOLD BASELINE (NEW)
+    # 8. VIX-ENHANCED THRESHOLD BASELINE
     # ============================================================
     print("\n[8] VIX-Enhanced Threshold Baseline:")
     
     # Test different VIX thresholds
     vix_thresholds = [15, 18, 20, 22, 25]
     vix_enhanced_results = []
-    
-    fci_threshold = features.loc[train_idx, 'fci'].quantile(0.90)
     
     for vix_t in vix_thresholds:
         # Rule: FCI > 90th percentile AND VIX > vix_t
@@ -247,14 +246,64 @@ def main():
     vix_enhanced_auc = best_vix['auc']
     vix_enhanced_f1 = best_vix['f1']
     
-    # 9. Logistic Regression (Tier 2)
-    print("\n[9] Training Logistic Regression...")
+    # ============================================================
+    # 9. FCI TREND ENHANCED THRESHOLD (NEW)
+    # ============================================================
+    print("\n[9] FCI Trend-Enhanced Threshold Baseline:")
+    
+    # Calculate rolling average of FCI (20-day)
+    features['fci_ma20'] = features['fci'].rolling(20).mean()
+    features['fci_trend'] = (features['fci'] > features['fci_ma20']).astype(int)
+    
+    # Rule: FCI > 90th percentile AND FCI > 20-day MA
+    signal_trend = (features['fci'] > fci_threshold) & (features['fci_trend'] == 1)
+    
+    # Evaluate on test
+    y_pred_test = signal_trend.loc[test_idx].astype(int)
+    y_true_test = target.loc[test_idx]
+    
+    tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
+    trend_auc = roc_auc_score(y_true_test, y_pred_test)
+    trend_precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    trend_recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    trend_f1 = 2 * trend_precision * trend_recall / (trend_precision + trend_recall) if (trend_precision + trend_recall) > 0 else 0
+    
+    print(f"\n   Rule: FCI > 90th percentile AND FCI > 20-day MA")
+    print(f"   AUC-ROC: {trend_auc:.4f}")
+    print(f"   F1: {trend_f1:.4f}")
+    print(f"   Precision: {trend_precision:.4f}")
+    print(f"   Recall: {trend_recall:.4f}")
+    print(f"   Predictions: {int(y_pred_test.sum())}, TP: {tp}")
+    
+    # Combined: FCI > 90% AND FCI > MA20 AND VIX > 20
+    signal_combined = (features['fci'] > fci_threshold) & (features['fci_trend'] == 1) & (features['vix_level'] > 20)
+    
+    y_pred_test = signal_combined.loc[test_idx].astype(int)
+    y_true_test = target.loc[test_idx]
+    
+    tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
+    combined_auc = roc_auc_score(y_true_test, y_pred_test)
+    combined_precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    combined_recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    combined_f1 = 2 * combined_precision * combined_recall / (combined_precision + combined_recall) if (combined_precision + combined_recall) > 0 else 0
+    
+    print(f"\n   Combined Rule: FCI > 90% AND FCI > MA20 AND VIX > 20")
+    print(f"   AUC-ROC: {combined_auc:.4f}")
+    print(f"   F1: {combined_f1:.4f}")
+    print(f"   Precision: {combined_precision:.4f}")
+    print(f"   Recall: {combined_recall:.4f}")
+    print(f"   Predictions: {int(y_pred_test.sum())}, TP: {tp}")
+    
+    # ============================================================
+    # 10. Logistic Regression (Tier 2)
+    # ============================================================
+    print("\n[10] Training Logistic Regression...")
     lr_model = ModelFactory.get_model('logistic_regression')
     lr_results = ModelFactory.train_and_evaluate(
         lr_model, X_train, y_train, X_test, y_test, use_smote=True
     )
     
-    print("\n[10] Evaluating Logistic Regression...")
+    print("\n[11] Evaluating Logistic Regression...")
     lr_eval = evaluate_model(y_test, lr_results['y_pred_proba'], threshold=lr_results['optimal_threshold'])
     print_evaluation(lr_eval)
     
@@ -267,14 +316,16 @@ def main():
     )
     print(f"   Run ID: {run_id}")
     
-    # 11. Random Forest (Tier 3)
-    print("\n[11] Training Random Forest...")
+    # ============================================================
+    # 12. Random Forest (Tier 3)
+    # ============================================================
+    print("\n[12] Training Random Forest...")
     rf_model = ModelFactory.get_model('random_forest', n_estimators=100)
     rf_results = ModelFactory.train_and_evaluate(
         rf_model, X_train, y_train, X_test, y_test, use_smote=False
     )
     
-    print("\n[12] Evaluating Random Forest...")
+    print("\n[13] Evaluating Random Forest...")
     rf_eval = evaluate_model(y_test, rf_results['y_pred_proba'], threshold=rf_results['optimal_threshold'])
     print_evaluation(rf_eval)
     
@@ -287,20 +338,28 @@ def main():
     )
     print(f"   Run ID: {run_id}")
     
-    # 13. Feature importance (Random Forest)
-    print("\n[13] Feature importance (Random Forest):")
+    # ============================================================
+    # 14. Feature importance (Random Forest)
+    # ============================================================
+    print("\n[14] Feature importance (Random Forest):")
     importance = get_feature_importance(rf_results['model'], X_train.columns.tolist())
     print(importance.head(10).to_string(index=False))
     
-    # 14. Model Comparison
-    print("\n[14] Model Comparison:")
-    print(f"   Threshold Baseline (90%):      AUC-ROC: {threshold_results['auc_roc']:.4f}")
-    print(f"   VIX-Enhanced Threshold:        AUC-ROC: {vix_enhanced_auc:.4f} (Best VIX threshold: {best_vix['vix_threshold']})")
-    print(f"   Logistic Regression:           AUC-ROC: {lr_eval['auc_roc']:.4f}")
-    print(f"   Random Forest:                 AUC-ROC: {rf_eval['auc_roc']:.4f}")
+    # ============================================================
+    # 15. Model Comparison
+    # ============================================================
+    print("\n[15] Model Comparison:")
+    print(f"   Threshold Baseline (90%):        AUC-ROC: {threshold_results['auc_roc']:.4f}")
+    print(f"   VIX-Enhanced Threshold:          AUC-ROC: {vix_enhanced_auc:.4f} (VIX > {best_vix['vix_threshold']})")
+    print(f"   FCI Trend-Enhanced:              AUC-ROC: {trend_auc:.4f}")
+    print(f"   Combined (FCI + Trend + VIX):    AUC-ROC: {combined_auc:.4f}")
+    print(f"   Logistic Regression:             AUC-ROC: {lr_eval['auc_roc']:.4f}")
+    print(f"   Random Forest:                   AUC-ROC: {rf_eval['auc_roc']:.4f}")
     
     best_model = max([(threshold_results['auc_roc'], 'Threshold (90%)'), 
                       (vix_enhanced_auc, 'VIX-Enhanced'),
+                      (trend_auc, 'FCI Trend'),
+                      (combined_auc, 'Combined'),
                       (lr_eval['auc_roc'], 'Logistic Regression'),
                       (rf_eval['auc_roc'], 'Random Forest')], key=lambda x: x[0])
     print(f"\n   Best Model: {best_model[1]} (AUC-ROC: {best_model[0]:.4f})")
