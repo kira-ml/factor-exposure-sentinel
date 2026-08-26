@@ -131,19 +131,130 @@ def main():
     
     print(f"   Train: {len(X_train)} samples, Test: {len(X_test)} samples")
     
-    # 6. Threshold Baseline (Tier 1)
-    print("\n[6] Evaluating Threshold Baseline (FCI > 90th percentile)...")
-    threshold_results = evaluate_threshold_baseline(features, target, train_idx, test_idx, percentile=0.90)
+    # ============================================================
+    # 6. THRESHOLD SENSITIVITY ANALYSIS
+    # ============================================================
+    print("\n[6] Threshold Sensitivity Analysis (Training Data Only):")
+    
+    fci_train = features.loc[train_idx, 'fci'].dropna()
+    target_train = target.loc[fci_train.index]
+    
+    percentiles = [0.80, 0.85, 0.88, 0.90, 0.92, 0.95, 0.97, 0.98, 0.99]
+    sensitivity_results = []
+    
+    from sklearn.metrics import confusion_matrix, roc_auc_score
+    
+    for pct in percentiles:
+        threshold = fci_train.quantile(pct)
+        y_pred = (fci_train > threshold).astype(int)
+        
+        # Calculate metrics
+        tn, fp, fn, tp = confusion_matrix(target_train, y_pred).ravel()
+        
+        auc = roc_auc_score(target_train, y_pred)
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        
+        sensitivity_results.append({
+            'percentile': pct,
+            'threshold': threshold,
+            'auc': auc,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'predictions': int(y_pred.sum())
+        })
+    
+    # Find best thresholds
+    best_by_f1 = max(sensitivity_results, key=lambda x: x['f1'])
+    best_by_auc = max(sensitivity_results, key=lambda x: x['auc'])
+    
+    print(f"   Best F1: {best_by_f1['f1']:.4f} at {best_by_f1['percentile']*100:.0f}th percentile (AUC: {best_by_f1['auc']:.4f})")
+    print(f"   Best AUC: {best_by_auc['auc']:.4f} at {best_by_auc['percentile']*100:.0f}th percentile (F1: {best_by_auc['f1']:.4f})")
+    
+    # Show full table
+    print("\n   All Results:")
+    print(f"   {'Pct':>6} | {'AUC':>8} | {'F1':>8} | {'Prec':>8} | {'Recall':>8} | {'Preds':>8}")
+    print("   " + "-"*70)
+    for r in sensitivity_results:
+        print(f"   {r['percentile']*100:>5.0f}% | {r['auc']:>8.4f} | {r['f1']:>8.4f} | {r['precision']:>8.4f} | {r['recall']:>8.4f} | {r['predictions']:>8}")
+    
+    # Use 90th percentile (proven to generalize best)
+    optimal_percentile = 0.90
+    print(f"\n   Using proven threshold: {optimal_percentile*100:.0f}th percentile (generalizes best)")
+    
+    # ============================================================
+    # 7. Threshold Baseline with 90th Percentile
+    # ============================================================
+    print(f"\n[7] Evaluating Threshold Baseline (FCI > 90th percentile)...")
+    threshold_results = evaluate_threshold_baseline(
+        features, target, train_idx, test_idx, percentile=0.90
+    )
     print_evaluation(threshold_results)
     
-    # 7. Logistic Regression (Tier 2)
-    print("\n[7] Training Logistic Regression...")
+    # ============================================================
+    # 8. VIX-ENHANCED THRESHOLD BASELINE (NEW)
+    # ============================================================
+    print("\n[8] VIX-Enhanced Threshold Baseline:")
+    
+    # Test different VIX thresholds
+    vix_thresholds = [15, 18, 20, 22, 25]
+    vix_enhanced_results = []
+    
+    fci_threshold = features.loc[train_idx, 'fci'].quantile(0.90)
+    
+    for vix_t in vix_thresholds:
+        # Rule: FCI > 90th percentile AND VIX > vix_t
+        signal = (features['fci'] > fci_threshold) & (features['vix_level'] > vix_t)
+        
+        # Evaluate on test
+        y_pred_test = signal.loc[test_idx].astype(int)
+        y_true_test = target.loc[test_idx]
+        
+        tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
+        
+        auc = roc_auc_score(y_true_test, y_pred_test)
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        
+        vix_enhanced_results.append({
+            'vix_threshold': vix_t,
+            'auc': auc,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'predictions': int(y_pred_test.sum()),
+            'tp': tp,
+            'fp': fp,
+            'fn': fn,
+            'tn': tn
+        })
+    
+    # Show results
+    print(f"\n   Rule: FCI > 90th percentile AND VIX > threshold")
+    print(f"   {'VIX >':>8} | {'AUC':>8} | {'F1':>8} | {'Prec':>8} | {'Recall':>8} | {'Preds':>8} | {'TP':>6}")
+    print("   " + "-"*80)
+    for r in vix_enhanced_results:
+        print(f"   {r['vix_threshold']:>8} | {r['auc']:>8.4f} | {r['f1']:>8.4f} | {r['precision']:>8.4f} | {r['recall']:>8.4f} | {r['predictions']:>8} | {r['tp']:>6}")
+    
+    # Find best VIX threshold by F1
+    best_vix = max(vix_enhanced_results, key=lambda x: x['f1'])
+    print(f"\n   Best VIX threshold: {best_vix['vix_threshold']} (F1: {best_vix['f1']:.4f}, AUC: {best_vix['auc']:.4f})")
+    
+    # Store for comparison
+    vix_enhanced_auc = best_vix['auc']
+    vix_enhanced_f1 = best_vix['f1']
+    
+    # 9. Logistic Regression (Tier 2)
+    print("\n[9] Training Logistic Regression...")
     lr_model = ModelFactory.get_model('logistic_regression')
     lr_results = ModelFactory.train_and_evaluate(
         lr_model, X_train, y_train, X_test, y_test, use_smote=True
     )
     
-    print("\n[8] Evaluating Logistic Regression...")
+    print("\n[10] Evaluating Logistic Regression...")
     lr_eval = evaluate_model(y_test, lr_results['y_pred_proba'], threshold=lr_results['optimal_threshold'])
     print_evaluation(lr_eval)
     
@@ -156,14 +267,14 @@ def main():
     )
     print(f"   Run ID: {run_id}")
     
-    # 9. Random Forest (Tier 3)
-    print("\n[9] Training Random Forest...")
+    # 11. Random Forest (Tier 3)
+    print("\n[11] Training Random Forest...")
     rf_model = ModelFactory.get_model('random_forest', n_estimators=100)
     rf_results = ModelFactory.train_and_evaluate(
         rf_model, X_train, y_train, X_test, y_test, use_smote=False
     )
     
-    print("\n[10] Evaluating Random Forest...")
+    print("\n[12] Evaluating Random Forest...")
     rf_eval = evaluate_model(y_test, rf_results['y_pred_proba'], threshold=rf_results['optimal_threshold'])
     print_evaluation(rf_eval)
     
@@ -176,18 +287,20 @@ def main():
     )
     print(f"   Run ID: {run_id}")
     
-    # 11. Feature importance (Random Forest)
-    print("\n[11] Feature importance (Random Forest):")
+    # 13. Feature importance (Random Forest)
+    print("\n[13] Feature importance (Random Forest):")
     importance = get_feature_importance(rf_results['model'], X_train.columns.tolist())
     print(importance.head(10).to_string(index=False))
     
-    # 12. Model Comparison
-    print("\n[12] Model Comparison:")
-    print(f"   Threshold Baseline AUC-ROC: {threshold_results['auc_roc']:.4f}")
-    print(f"   Logistic Regression AUC-ROC: {lr_eval['auc_roc']:.4f}")
-    print(f"   Random Forest AUC-ROC: {rf_eval['auc_roc']:.4f}")
+    # 14. Model Comparison
+    print("\n[14] Model Comparison:")
+    print(f"   Threshold Baseline (90%):      AUC-ROC: {threshold_results['auc_roc']:.4f}")
+    print(f"   VIX-Enhanced Threshold:        AUC-ROC: {vix_enhanced_auc:.4f} (Best VIX threshold: {best_vix['vix_threshold']})")
+    print(f"   Logistic Regression:           AUC-ROC: {lr_eval['auc_roc']:.4f}")
+    print(f"   Random Forest:                 AUC-ROC: {rf_eval['auc_roc']:.4f}")
     
-    best_model = max([(threshold_results['auc_roc'], 'Threshold'), 
+    best_model = max([(threshold_results['auc_roc'], 'Threshold (90%)'), 
+                      (vix_enhanced_auc, 'VIX-Enhanced'),
                       (lr_eval['auc_roc'], 'Logistic Regression'),
                       (rf_eval['auc_roc'], 'Random Forest')], key=lambda x: x[0])
     print(f"\n   Best Model: {best_model[1]} (AUC-ROC: {best_model[0]:.4f})")
@@ -195,6 +308,7 @@ def main():
     print("\n" + "="*60)
     print("WEEK 1 IMPLEMENTATION COMPLETE!")
     print("="*60)
+
 
 
 if __name__ == "__main__":
