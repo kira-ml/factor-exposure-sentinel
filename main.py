@@ -196,7 +196,7 @@ def main():
     # ============================================================
     print(f"\n[7] Evaluating Threshold Baseline (FCI > 90th percentile)...")
     threshold_results = evaluate_threshold_baseline(
-        features, target, train_idx, test_idx, percentile=0.90
+        features, target, train_idx, val_idx, percentile=0.90
     )
     print_evaluation(threshold_results)
     
@@ -307,11 +307,11 @@ def main():
     print("\n[10] Training Logistic Regression...")
     lr_model = ModelFactory.get_model('logistic_regression')
     lr_results = ModelFactory.train_and_evaluate(
-        lr_model, X_train, y_train, X_test, y_test, use_smote=True
+        lr_model, X_train, y_train, X_val, y_val, use_smote=True
     )
     
     print("\n[11] Evaluating Logistic Regression...")
-    lr_eval = evaluate_model(y_test, lr_results['y_pred_proba'], threshold=lr_results['optimal_threshold'])
+    lr_eval = evaluate_model(y_val, lr_results['y_pred_proba'], threshold=lr_results['optimal_threshold'])
     print_evaluation(lr_eval)
     
     # Save LR results
@@ -329,11 +329,11 @@ def main():
     print("\n[12] Training Random Forest...")
     rf_model = ModelFactory.get_model('random_forest', n_estimators=100)
     rf_results = ModelFactory.train_and_evaluate(
-        rf_model, X_train, y_train, X_test, y_test, use_smote=False
+        rf_model, X_train, y_train, X_val, y_val, use_smote=False
     )
     
     print("\n[13] Evaluating Random Forest...")
-    rf_eval = evaluate_model(y_test, rf_results['y_pred_proba'], threshold=rf_results['optimal_threshold'])
+    rf_eval = evaluate_model(y_val, rf_results['y_pred_proba'], threshold=rf_results['optimal_threshold'])
     print_evaluation(rf_eval)
     
     # Save RF results
@@ -372,7 +372,7 @@ def main():
         # Scale features
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
+        X_val_scaled = scaler.transform(X_val)
         
         # Calibrate probabilities using Platt scaling (sigmoid)
         calibrated_model = CalibratedClassifierCV(
@@ -382,17 +382,17 @@ def main():
         )
         calibrated_model.fit(X_train_scaled, y_train)
         
-        # Get calibrated probabilities
-        y_pred_proba = calibrated_model.predict_proba(X_test_scaled)[:, 1]
+        # Get calibrated probabilities on validation set
+        y_pred_proba = calibrated_model.predict_proba(X_val_scaled)[:, 1]
         
-        # ---- OPTIMAL THRESHOLD SELECTION ----
+        # ---- OPTIMAL THRESHOLD SELECTION ON VALIDATION SET ----
         thresholds = np.linspace(0.01, 0.50, 50)
         best_f1 = 0
         best_threshold = 0.05
         best_eval = None
         
         for thresh in thresholds:
-            eval_result = evaluate_model(y_test, y_pred_proba, threshold=thresh)
+            eval_result = evaluate_model(y_val, y_pred_proba, threshold=thresh)
             if eval_result['f1'] > best_f1:
                 best_f1 = eval_result['f1']
                 best_threshold = thresh
@@ -421,10 +421,12 @@ def main():
         print("   Skipping XGBoost.")
         xgb_eval = None
 
+
+
     # ============================================================
-    # 16. Model Comparison
+    # 16. Model Selection (Validation Set Results)
     # ============================================================
-    print("\n[16] Model Comparison:")
+    print("\n[16] Model Selection (Validation Set Results):")
     print(f"   Threshold Baseline (90%):        AUC-ROC: {threshold_results['auc_roc']:.4f}")
     print(f"   VIX-Enhanced Threshold:          AUC-ROC: {vix_enhanced_auc:.4f} (VIX > {best_vix['vix_threshold']})")
     print(f"   FCI Trend-Enhanced:              AUC-ROC: {trend_auc:.4f}")
@@ -436,6 +438,7 @@ def main():
     if xgb_eval is not None:
         print(f"   XGBoost:                         AUC-ROC: {xgb_eval['auc_roc']:.4f}")
     
+    # Select best model based on validation AUC
     best_models = [(threshold_results['auc_roc'], 'Threshold (90%)'), 
                    (vix_enhanced_auc, 'VIX-Enhanced'),
                    (trend_auc, 'FCI Trend'),
@@ -446,10 +449,124 @@ def main():
     if xgb_eval is not None:
         best_models.append((xgb_eval['auc_roc'], 'XGBoost'))
     
-    best_model = max(best_models, key=lambda x: x[0])
-    print(f"\n   Best Model: {best_model[1]} (AUC-ROC: {best_model[0]:.4f})")
-
-
+    best_model_name = max(best_models, key=lambda x: x[0])[1]
+    best_val_auc = max(best_models, key=lambda x: x[0])[0]
+    print(f"\n   Best Model on Validation: {best_model_name} (AUC-ROC: {best_val_auc:.4f})")
+    
+    # ============================================================
+    # 17. FINAL EVALUATION ON TEST SET (ONE-TIME)
+    # ============================================================
+    print("\n[17] FINAL EVALUATION ON TEST SET (Out-of-Sample):")
+    print("   ⚠️  This is the ONE AND ONLY evaluation on test data.")
+    print("   No further tuning or model selection should be done after this.")
+    
+    # Evaluate the best model on test set
+    # Re-train on full training data with the best model's parameters
+    # For now, we'll evaluate the best performing model on test data
+    
+    # For Logistic Regression (if it's the best)
+    if best_model_name == 'Logistic Regression':
+        # Re-train LR on full training data
+        lr_model_final = ModelFactory.get_model('logistic_regression')
+        lr_results_final = ModelFactory.train_and_evaluate(
+            lr_model_final, X_train, y_train, X_test, y_test, use_smote=True
+        )
+        # Use the threshold found on validation
+        final_eval = evaluate_model(y_test, lr_results_final['y_pred_proba'], threshold=lr_results['optimal_threshold'])
+        print(f"\n   Logistic Regression (Test Set):")
+        print(f"      AUC-ROC: {final_eval['auc_roc']:.4f}")
+        print(f"      F1: {final_eval['f1']:.4f}")
+        print(f"      Precision: {final_eval['precision']:.4f}")
+        print(f"      Recall: {final_eval['recall']:.4f}")
+    
+    # For Random Forest (if it's the best)
+    elif best_model_name == 'Random Forest':
+        rf_model_final = ModelFactory.get_model('random_forest', n_estimators=100)
+        rf_results_final = ModelFactory.train_and_evaluate(
+            rf_model_final, X_train, y_train, X_test, y_test, use_smote=False
+        )
+        final_eval = evaluate_model(y_test, rf_results_final['y_pred_proba'], threshold=rf_results['optimal_threshold'])
+        print(f"\n   Random Forest (Test Set):")
+        print(f"      AUC-ROC: {final_eval['auc_roc']:.4f}")
+        print(f"      F1: {final_eval['f1']:.4f}")
+        print(f"      Precision: {final_eval['precision']:.4f}")
+        print(f"      Recall: {final_eval['recall']:.4f}")
+    
+    # For XGBoost (if it's the best)
+    elif best_model_name == 'XGBoost' and xgb_eval is not None:
+        xgb_model_final = ModelFactory.get_model('xgboost',
+                                                  n_estimators=100,
+                                                  max_depth=4,
+                                                  learning_rate=0.1,
+                                                  scale_pos_weight=10)
+        X_train_scaled_final = scaler.fit_transform(X_train)
+        X_test_scaled_final = scaler.transform(X_test)
+        calibrated_model_final = CalibratedClassifierCV(xgb_model_final, method='sigmoid', cv=3)
+        calibrated_model_final.fit(X_train_scaled_final, y_train)
+        y_pred_proba_final = calibrated_model_final.predict_proba(X_test_scaled_final)[:, 1]
+        final_eval = evaluate_model(y_test, y_pred_proba_final, threshold=best_threshold)
+        print(f"\n   XGBoost (Test Set):")
+        print(f"      AUC-ROC: {final_eval['auc_roc']:.4f}")
+        print(f"      F1: {final_eval['f1']:.4f}")
+        print(f"      Precision: {final_eval['precision']:.4f}")
+        print(f"      Recall: {final_eval['recall']:.4f}")
+    
+    # For threshold-based rules (if they are the best)
+    else:
+        # Threshold-based rules are simple - evaluate directly on test
+        print(f"\n   {best_model_name} (Test Set):")
+        # Re-run threshold baseline on test set
+        if best_model_name == 'Threshold (90%)':
+            threshold_results_test = evaluate_threshold_baseline(
+                features, target, train_idx, test_idx, percentile=0.90
+            )
+            print(f"      AUC-ROC: {threshold_results_test['auc_roc']:.4f}")
+            print(f"      F1: {threshold_results_test['f1']:.4f}")
+            print(f"      Precision: {threshold_results_test['precision']:.4f}")
+            print(f"      Recall: {threshold_results_test['recall']:.4f}")
+        elif best_model_name == 'VIX-Enhanced':
+            signal = (features['fci'] > fci_threshold) & (features['vix_level'] > best_vix['vix_threshold'])
+            y_pred_test = signal.loc[test_idx].astype(int)
+            y_true_test = target.loc[test_idx]
+            test_auc = roc_auc_score(y_true_test, y_pred_test)
+            tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
+            test_precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            test_recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            test_f1 = 2 * test_precision * test_recall / (test_precision + test_recall) if (test_precision + test_recall) > 0 else 0
+            print(f"      AUC-ROC: {test_auc:.4f}")
+            print(f"      F1: {test_f1:.4f}")
+            print(f"      Precision: {test_precision:.4f}")
+            print(f"      Recall: {test_recall:.4f}")
+        elif best_model_name == 'FCI Trend':
+            signal = (features['fci'] > fci_threshold) & (features['fci_trend'] == 1)
+            y_pred_test = signal.loc[test_idx].astype(int)
+            y_true_test = target.loc[test_idx]
+            test_auc = roc_auc_score(y_true_test, y_pred_test)
+            tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
+            test_precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            test_recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            test_f1 = 2 * test_precision * test_recall / (test_precision + test_recall) if (test_precision + test_recall) > 0 else 0
+            print(f"      AUC-ROC: {test_auc:.4f}")
+            print(f"      F1: {test_f1:.4f}")
+            print(f"      Precision: {test_precision:.4f}")
+            print(f"      Recall: {test_recall:.4f}")
+        elif best_model_name == 'Combined':
+            signal = (features['fci'] > fci_threshold) & (features['fci_trend'] == 1) & (features['vix_level'] > 20)
+            y_pred_test = signal.loc[test_idx].astype(int)
+            y_true_test = target.loc[test_idx]
+            test_auc = roc_auc_score(y_true_test, y_pred_test)
+            tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
+            test_precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            test_recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            test_f1 = 2 * test_precision * test_recall / (test_precision + test_recall) if (test_precision + test_recall) > 0 else 0
+            print(f"      AUC-ROC: {test_auc:.4f}")
+            print(f"      F1: {test_f1:.4f}")
+            print(f"      Precision: {test_precision:.4f}")
+            print(f"      Recall: {test_recall:.4f}")
+    
+    print("\n" + "="*60)
+    print("⚠️  FINAL TEST RESULTS - DO NOT TUNE FURTHER")
+    print("="*60)
 
 if __name__ == "__main__":
     main()
