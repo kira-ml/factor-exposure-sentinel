@@ -112,6 +112,52 @@ def portfolio_hhi(weights: pd.DataFrame) -> pd.Series:
     return (weights ** 2).sum(axis=1)
 
 
+
+def fetch_credit_spread(start_date="2010-01-01", end_date="2024-12-31"):
+    """
+    Fetch credit spread (HYG vs LQD ratio) as a proxy for credit risk.
+    Returns a Series with datetime index.
+    """
+    import yfinance as yf
+    try:
+        # Try getting HYG and LQD
+        hyg = yf.download("HYG", start=start_date, end=end_date, progress=False)
+        lqd = yf.download("LQD", start=start_date, end=end_date, progress=False)
+        
+        if not hyg.empty and not lqd.empty:
+            # Extract Adj Close or Close as Series
+            if 'Adj Close' in hyg.columns:
+                hyg_series = hyg['Adj Close']
+            else:
+                hyg_series = hyg['Close']
+            
+            if 'Adj Close' in lqd.columns:
+                lqd_series = lqd['Adj Close']
+            else:
+                lqd_series = lqd['Close']
+            
+            # Ensure they are Series, not DataFrames
+            if isinstance(hyg_series, pd.DataFrame):
+                hyg_series = hyg_series.iloc[:, 0]
+            if isinstance(lqd_series, pd.DataFrame):
+                lqd_series = lqd_series.iloc[:, 0]
+            
+            # Calculate spread and return as Series
+            spread = hyg_series / lqd_series
+            spread = spread.rename('credit_spread')
+            
+            # Forward fill to handle any missing values
+            spread = spread.ffill()
+            
+            return spread
+    except Exception as e:
+        print(f"Credit spread fetch failed: {e}")
+    return None
+
+
+
+
+
 def create_features(asset_returns: pd.DataFrame,
                     factor_returns: pd.DataFrame,
                     portfolio_weights: pd.DataFrame,
@@ -183,5 +229,24 @@ def create_features(asset_returns: pd.DataFrame,
     # 4. Factor correlation (crowding proxy)
     features['factor_corr_60'] = rolling_factor_correlation(factor_returns, window=60)
     features['factor_corr_120'] = rolling_factor_correlation(factor_returns, window=120)
+
+    # Add credit spread if available
+    credit_spread = fetch_credit_spread(asset_returns.index[0], asset_returns.index[-1])
+    if credit_spread is not None:
+        # Ensure it's a Series, not DataFrame
+        if isinstance(credit_spread, pd.DataFrame):
+            # Take first column if multiple
+            if len(credit_spread.columns) > 1:
+                credit_spread = credit_spread.iloc[:, 0]
+            else:
+                credit_spread = credit_spread.squeeze()
+        
+        features['credit_spread'] = credit_spread.reindex(features.index)
+        features['credit_spread_change'] = features['credit_spread'].pct_change()
+
     
     return features
+
+
+
+
