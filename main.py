@@ -347,13 +347,13 @@ def main():
 
 
     # ============================================================
-    # 14. XGBoost with Calibration (Conditional Tier 4)
+    # 15. XGBoost with Calibration (Conditional Tier 4)
     # ============================================================
-    print("\n[14] Training XGBoost with Calibration...")
+    print("\n[15] Training XGBoost with Calibration...")
+    xgb_eval = None
     try:
         from sklearn.calibration import CalibratedClassifierCV
         from sklearn.preprocessing import StandardScaler
-        from sklearn.metrics import precision_recall_curve
         
         # Get XGBoost model
         xgb_model = ModelFactory.get_model('xgboost', 
@@ -379,7 +379,6 @@ def main():
         y_pred_proba = calibrated_model.predict_proba(X_test_scaled)[:, 1]
         
         # ---- OPTIMAL THRESHOLD SELECTION ----
-        # Grid search over thresholds (0.01 to 0.50)
         thresholds = np.linspace(0.01, 0.50, 50)
         best_f1 = 0
         best_threshold = 0.05
@@ -392,22 +391,17 @@ def main():
                 best_threshold = thresh
                 best_eval = eval_result
         
-        print(f"\n[15] Evaluating XGBoost (calibrated, threshold={best_threshold:.3f})...")
+        print(f"\n[16] Evaluating XGBoost (calibrated, threshold={best_threshold:.3f})...")
         print_evaluation(best_eval)
         
-        # Save results
+        # Save results (skip feature importance for calibrated model)
         run_id = save_results(
             results=best_eval,
-            feature_names=X_train.columns.tolist(),
-            coefficients=xgb_model.feature_importances_.tolist(),
+            feature_names=None,
+            coefficients=None,
             model_name="xgboost_calibrated"
         )
         print(f"   Run ID: {run_id}")
-        
-        # Feature importance
-        print("\n[15b] Feature importance (XGBoost):")
-        xgb_importance = get_feature_importance(xgb_model, X_train.columns.tolist())
-        print(xgb_importance.head(10).to_string(index=False))
         
         xgb_eval = best_eval
         
@@ -415,10 +409,11 @@ def main():
         print(f"\n   ⚠️ XGBoost not available: {e}")
         print("   Skipping XGBoost. Run: pip install xgboost")
         xgb_eval = None
-    
-    # ============================================================
-    # 15. Model Comparison
-    # ============================================================
+    except Exception as e:
+        print(f"\n   ⚠️ XGBoost error: {e}")
+        print("   Skipping XGBoost.")
+        xgb_eval = None
+
     # ============================================================
     # 16. Model Comparison
     # ============================================================
