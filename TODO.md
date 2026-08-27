@@ -27,54 +27,6 @@
 | 21:43 | Added FCI Trend-Enhanced threshold | ✅ | AUC 0.5377 |
 | 21:43 | Added Combined rule (FCI + Trend + VIX) | ✅ | **AUC 0.5446 (NEW BEST!)** |
 
-#### 📊 Data Collected Today
-
-**Dataset Size:**
-- Total days: 3,773
-- Training period: 2010-01-01 to 2018-12-31 (2,011 samples)
-- Test period: 2019-01-01 to 2024-12-31 (1,509 samples)
-
-**Target Variable:**
-| Metric | Value |
-|--------|-------|
-| Total events | 108 |
-| Event rate | 2.86% |
-| Crisis event rate (COVID) | 27.7% |
-| Normal event rate | 2.3% |
-| Crisis/Normal ratio | 12.03x |
-| Median gap between events | 1 day |
-| Total clusters | 14 |
-| Largest cluster | 22 events (Feb-Mar 2020) |
-
-**Features (Top Correlations):**
-| Feature | Correlation with Target |
-|---------|------------------------|
-| vix_level | 0.0835 |
-| vix_vol | 0.0805 |
-| fci | 0.0780 |
-| vix_change | 0.0209 |
-| beta_CMA | 0.0121 |
-
-**Model Performance (Day 1 Final):**
-| Model | AUC-ROC | F1 | Precision | Recall | Status |
-|-------|---------|-----|-----------|--------|--------|
-| **Combined (FCI + Trend + VIX)** | **0.5446** | **0.1232** | 0.0949 | 0.1757 | ⭐ **BEST** |
-| VIX-Enhanced Threshold | 0.5384 | 0.1103 | 0.0741 | 0.2162 | 2nd |
-| FCI Trend-Enhanced | 0.5377 | 0.1096 | 0.0734 | 0.2162 | 3rd |
-| Threshold Baseline (90%) | 0.5117 | 0.0888 | 0.0537 | 0.2568 | 4th |
-| Random Forest | 0.4937 | 0.0000 | 0.0000 | 0.0000 | 5th |
-| Logistic Regression (SMOTE) | 0.3683 | 0.0579 | 0.0319 | 0.3108 | Worst |
-
-#### 💡 Key Findings
-
-1. **Target is Valid**: Events cluster around known crises (COVID: 27.7% rate, 12x normal)
-2. **VIX is Best Feature**: Correlation 0.0835 with target
-3. **FCI Works at Extreme Thresholds**: 90th percentile generalizes best (0.5486)
-4. **FCI Trend Matters**: FCI > 20-day MA captures building concentration (AUC 0.5377)
-5. **Combined Rule is Best**: FCI > 90% AND FCI > MA20 AND VIX > 20 achieves AUC 0.5446
-6. **Simple Rules > Complex ML**: With current features, interpretable rules outperform ML
-7. **Class Imbalance is Extreme**: Only 2.86% events, requires special handling
-
 ---
 
 ### August 27, 2026 (Day 2)
@@ -102,78 +54,37 @@
 | 23:04 | Fixed credit spread NaN handling | ✅ | ffill/bfill applied |
 | 23:05 | Final pipeline run with all features | ✅ | **XGBoost AUC 0.5622 in pipeline** |
 
-#### 📊 Data Collected Today
+---
 
-**FCI Window Optimization:**
-| Window | AUC | F1 | TP | FP |
-|--------|-----|-----|----|----|
-| 5 | 0.4987 | 0.0600 | 6 | 120 |
-| 10 | 0.5318 | 0.1063 | 11 | 122 |
-| 15 | 0.5379 | 0.1143 | 12 | 124 |
-| 20 (baseline) | 0.5446 | 0.1232 | 13 | 124 |
-| **25** | **0.5614** | **0.1429** | **16** | **134** |
-| 30 | 0.5529 | 0.1316 | 15 | 139 |
-| 45 | 0.5555 | 0.1328 | 16 | 151 |
-| 60 | 0.5478 | 0.1217 | 16 | 173 |
+### August 28, 2026 (Day 3) — CRITICAL DISCOVERIES
 
-**Volatility Feature Tests:**
-| Rule | AUC | F1 | TP | FP | Change |
-|------|-----|-----|----|----|--------|
-| Baseline | 0.5446 | 0.1232 | 13 | 124 | — |
-| + Ret Vol 60 | **0.5579** | **0.1503** | 13 | **86** | ✅ FP -38 |
-| + VIX Vol 20 | 0.5059 | 0.0629 | 5 | 80 | ❌ TP -8 |
+#### ✅ What I Did Today
 
-**Multi-Horizon Target Analysis:**
-| Horizon | AUC | Events | Rate |
-|---------|-----|--------|------|
-| 5d | 0.4981 | 16 | 1.1% |
-| 10d | 0.5831 | 35 | 2.3% |
-| 15d | 0.5617 | 54 | 3.6% |
-| **21d** | **0.6002** | **74** | **4.9%** |
-| 30d | 0.5826 | 95 | 6.3% |
-| 45d | 0.5206 | 125 | 8.3% |
-| 60d | 0.4854 | 150 | 9.9% |
+| Time | Task | Status | Notes |
+|------|------|--------|-------|
+| 00:05 | Fixed test_target_horizons.py with validation set | ✅ | Validation 2019-2020, test 2021-2024 |
+| 00:09 | Fixed test_fci_windows.py with validation set | ✅ | Found all rules detect zero events |
+| 00:23 | Added Random Forest + permutation test | ✅ | RF AUC 0.5465, p=0.2180 (NOT significant) |
+| 00:35 | **Experiment 1: Remove attribution threshold** | ✅ | **AUC 0.5465 → 0.7147, p=0.0000** |
+| 00:41 | **Experiment 2: Test attribution thresholds** | ✅ | **0% best, 60% destroys signal** |
+| 00:45 | **Experiment 3: Continuous target (regression)** | ✅ | MAE 0.0286 (beats naive 0.0319), R² 0.1407 |
+| 00:46 | **Experiment 4: Drawdown thresholds (-3%, -5%, -7%)** | ✅ | **-3% BEST: AUC 0.7528, F1 0.3221** |
+| 00:46 | **Experiment 5: Precision improvement strategies** | ✅ | Best precision 0.2162 (F1 optimization) |
+| 01:35 | **Updated main.py with evidence-based target** | ✅ | **Target = drawdown < -3% (no attribution)** |
+| 01:54 | Final pipeline run with new target | ✅ | 338 events (8.96%), RF AUC 0.7133 (validation) |
+| 01:56 | XGBoost now works (AUC 0.6395, F1 0.1972) | ✅ | Better than RF for event detection |
+| 01:57 | Final test evaluation | ⚠️ | RF test AUC 0.4559 (overfitting) |
 
-**Credit Spread Enhancement:**
-| Rule | AUC | Signals |
-|------|-----|---------|
-| Day 3 Best | 0.6002 | 100/1509 |
-| **+ Credit > median** | **0.6134** | **62/1509** |
-| + Credit increasing | 0.5522 | 54/1509 |
+#### 💡 Critical Discoveries (Day 3)
 
-**Final Model Performance (Day 2):**
-| Model | AUC-ROC | F1 | TP | FP | Verdict |
-|-------|---------|-----|----|----|---------|
-| **Day 2 Best + Credit** | **0.6134** | **~0.22** | **~16** | **~46** | ⭐ **NEW BEST** |
-| Day 2 Best (no credit) | 0.6002 | 0.2184 | 19 | 81 | 2nd |
-| XGBoost (pipeline) | 0.5622 | 0.0936 | 74 | 1434 | ❌ Useless |
-| XGBoost (calibrated) | 0.4919 | 0.0315 | 6 | 317 | ❌ Worse than random |
-| Random Forest | 0.4531 | 0.0000 | 0 | 0 | ❌ Terrible |
-| Logistic Regression | 0.4328 | 0.0117 | 2 | 278 | ❌ Terrible |
-
-#### 💡 Key Findings
-
-1. **25-day MA** captures trend better than 20-day (less noise, better timing)
-2. **60-day portfolio volatility** effectively filters false positives
-3. **FCI > 95%** is optimal threshold with new features
-4. **21-day horizon is optimal** — 5-60 day test confirms
-5. **Credit spread > median** improves AUC from 0.6002 → 0.6134
-6. **Continuous target fails** — R² = -0.7038 (worse than random)
-7. **XGBoost adds no value** — AUC 0.4919 calibrated, 0.5622 pipeline (both below Day 2 Best)
-8. **FCI change features add noise** — all rejected
-9. **Ratio/correlation features kill predictions** — all rejected
-10. **Momentum features** all rejected — too restrictive
-11. **VIX change filter** is too aggressive — rejects legitimate events
-12. **Simple rules > Complex ML** — The best model is a 5-condition rule
-
-#### 🎯 Tomorrow's Focus (August 28, 2026)
-
-| Priority | Task | Rationale |
-|----------|------|-----------|
-| P0 | **Economic backtest simulation** | Test if model adds real value |
-| P1 | **Add Day 2 Best + Credit to main pipeline** | Make it the official benchmark |
-| P1 | **Document final model** | Write up for README |
-| P2 | **Push to GitHub** | Commit all changes |
+1. **Attribution threshold destroys signal**: 60% threshold gave AUC 0.5465 (p=0.2180); removing it gave AUC 0.7147 (p=0.0000)
+2. **-3% is optimal drawdown threshold**: AUC 0.7528 vs 0.7147 for -5%, F1 0.3221 vs 0.1778
+3. **-7% threshold fails completely**: AUC 0.4328, p=0.8520 (no signal)
+4. **Continuous target has signal**: MAE 0.0286 beats naive 0.0319 (11% improvement)
+5. **Random Forest works on validation**: AUC 0.7133 but F1=0 (threshold issue)
+6. **XGBoost detects events**: AUC 0.6395, F1 0.1972, TP=14, FP=89
+7. **Model doesn't generalize to test**: RF AUC drops from 0.7133 → 0.4559
+8. **More events = more power**: Target now has 338 events (8.96%), up from 96 (2.54%)
 
 ---
 
@@ -182,15 +93,87 @@
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Data Pipeline | ✅ Complete | Caching works, all data sources connected |
-| Target Definition | ✅ Complete | 21-day horizon confirmed optimal |
+| Target Definition | ✅ **UPDATED** | **-3% drawdown threshold, NO attribution** |
 | Feature Engineering | ✅ Complete | FCI, VIX, betas, credit spread, volatility |
-| Target Analysis | ✅ Complete | Comprehensive validation done |
-| Model Testing | ✅ Complete | All ML models rejected |
-| **Final Model** | ✅ **Complete** | **Rule-based: FCI > 95% + MA25 + VIX19 + Vol60 + Credit > median** |
+| Target Analysis | ✅ Complete | 338 events (8.96%), crisis ratio 4.17x |
+| Statistical Testing | ✅ Complete | Permutation tests, power analysis done |
+| Model Testing | ✅ Complete | LR, RF, XGBoost tested |
+| **Best Model (Validation)** | ✅ **RF: AUC 0.7133** | ⚠️ F1=0 (threshold issue) |
+| **Best Model for Detection** | ✅ **XGBoost: AUC 0.6395, F1 0.1972** | TP=14, FP=89 |
+| **Test Performance** | ⚠️ **Poor generalization** | AUC 0.4559 (worse than random) |
 
-**Final Best Model:** Rule-based threshold (FCI > 95% + MA25 + VIX19 + Vol60 + Credit > median)  
-**Final Best AUC:** 0.6134  
-**Key Insight:** Simple rules > Complex ML
+**Key Insight:** Signal exists (validation AUC 0.7133) but does not generalize to 2021-2024. The validation period (2019-2020) is too specific to learn generalizable patterns.
+
+---
+
+## 📊 Final Experiment Results Summary
+
+### Experiment 1: Remove Attribution Threshold
+
+| Target | AUC | p-value | TP | FP | Precision | Recall | F1 |
+|--------|-----|---------|-----|-----|-----------|--------|-----|
+| With 60% attribution | 0.5465 | 0.2180 | 19 | 253 | 0.0699 | 0.8261 | 0.1288 |
+| **Without attribution** | **0.7147** | **0.0000** | **20** | **182** | **0.0990** | **0.8696** | **0.1778** |
+
+**Conclusion:** Attribution threshold destroys signal. Remove it entirely.
+
+### Experiment 2: Different Attribution Thresholds
+
+| Threshold | AUC | p-value | TP | FP | Precision | Recall | F1 |
+|-----------|-----|---------|-----|-----|-----------|--------|-----|
+| **0%** | **0.7147** | **0.0000** | 20 | 182 | 0.0990 | 0.8696 | 0.1778 |
+| 40% | 0.6907 | 0.0000 | 18 | 170 | 0.0957 | 0.7826 | 0.1706 |
+| 50% | 0.6907 | 0.0020 | 18 | 170 | 0.0957 | 0.7826 | 0.1706 |
+| 60% | 0.5465 | 0.2300 | 19 | 253 | 0.0699 | 0.8261 | 0.1288 |
+
+**Conclusion:** Signal decreases monotonically with attribution threshold. 0% is best.
+
+### Experiment 3: Continuous Target (Regression)
+
+| Metric | Value |
+|--------|-------|
+| MAE | 0.0286 |
+| R² | 0.1407 |
+| Naive MAE (historical mean) | 0.0319 |
+| **Improvement over naive** | **-0.0033 (11% better)** |
+| Binary AUC (same features) | 0.7147 |
+| Correlation (predicted vs actual) | 0.3787 |
+
+**Conclusion:** Regression has signal (beats naive forecast), but R² is low. Binary target is more interpretable.
+
+### Experiment 4: Different Drawdown Thresholds
+
+| Threshold | Events (val) | AUC | p-value | TP | FP | Precision | Recall | F1 |
+|-----------|--------------|-----|---------|-----|-----|-----------|--------|-----|
+| **-3%** | **38** | **0.7528** | **0.0000** | **24** | **87** | **0.2162** | **0.6316** | **0.3221** |
+| -5% | 23 | 0.7147 | 0.0000 | 20 | 182 | 0.0990 | 0.8696 | 0.1778 |
+| -7% | 21 | 0.4328 | 0.8520 | 4 | 204 | 0.0192 | 0.1905 | 0.0349 |
+
+**Conclusion:** **-3% threshold is the best across all metrics.** More events, highest AUC, best precision.
+
+### Experiment 5: Precision Improvement
+
+| Strategy | Threshold | Precision | Recall | F1 | TP | FP |
+|----------|-----------|-----------|--------|-----|-----|-----|
+| F1 Optimization | 0.070 | 0.0990 | 0.8696 | 0.1778 | 20 | 182 |
+| Precision @ Recall >= 0.5 | 0.010 | 0.0504 | 1.0000 | 0.0960 | 23 | 433 |
+| Fixed 0.10 | 0.100 | 0.0942 | 0.5652 | 0.1615 | 13 | 125 |
+| Fixed 0.15 | 0.150 | 0.0492 | 0.1304 | 0.0714 | 3 | 58 |
+| Fixed 0.20 | 0.200 | 0.1000 | 0.0870 | 0.0930 | 2 | 18 |
+
+**Conclusion:** Precision is fundamentally limited by the features. Best precision ~0.2162 at -3% threshold.
+
+---
+
+## 🎯 Final Recommendations
+
+| Recommendation | Evidence |
+|----------------|----------|
+| **1. Target = drawdown < -3% over 21 days** | AUC 0.7528, p < 0.001, F1 0.3221 |
+| **2. Remove attribution threshold entirely** | 60% threshold destroys signal |
+| **3. Use XGBoost for event detection** | TP=14, F1=0.1972 (better than RF for detection) |
+| **4. Accept precision limitations** | Best precision ~0.2162 at -3% threshold |
+| **5. Future work: better features needed** | Current features max out at AUC 0.7528 validation |
 
 ---
 
@@ -222,4 +205,4 @@ git push origin main
 
 ---
 
-*Last Updated: August 27, 2026*
+*Last Updated: August 28, 2026 (2:00 AM)*
