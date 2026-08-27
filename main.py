@@ -84,7 +84,7 @@ def main():
     
     # 3. Create target
     print("\n[3] Creating target variable...")
-    target = create_target(portfolio_returns, factors)
+    target = create_target(portfolio_returns)
     print(f"   Event rate: {target.mean():.3f} ({target.sum()} events)")
     
     # 3b. Target analysis

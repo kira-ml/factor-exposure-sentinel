@@ -86,27 +86,28 @@ def factor_attribution(portfolio_returns: pd.Series,
     return attribution_series
 
 def create_target(portfolio_returns: pd.Series,
-                  factor_returns: pd.DataFrame,
-                  drawdown_threshold: float = -0.05,
-                  factor_threshold: float = 0.60,
+                  factor_returns: pd.DataFrame = None,
+                  drawdown_threshold: float = -0.03,
+                  factor_threshold: float = None,
                   horizon: int = 21) -> pd.Series:
     """
     Create binary target variable Y_t.
     
-    Y_t = 1 if:
-        1. Drawdown over next h days < -5%
-        2. Factor attribution > 60%
+    Y_t = 1 if drawdown over next h days < drawdown_threshold.
+    
+    Based on empirical evidence, the attribution threshold destroys signal.
+    The optimal threshold is -3% over 21 days.
     
     Parameters:
     -----------
     portfolio_returns : pd.Series
         Portfolio daily returns
     factor_returns : pd.DataFrame
-        Factor returns for attribution
+        Factor returns for attribution (optional, not used when None)
     drawdown_threshold : float
-        Drawdown threshold (default -0.05 = -5%)
+        Drawdown threshold (default -0.03 = -3%)
     factor_threshold : float
-        Factor attribution threshold (default 0.60 = 60%)
+        DEPRECATED: Attribution threshold (no longer used)
     horizon : int
         Prediction horizon in days (default 21)
     
@@ -117,10 +118,7 @@ def create_target(portfolio_returns: pd.Series,
     # Calculate drawdown
     drawdown = calculate_drawdown(portfolio_returns, window=horizon)
     
-    # Calculate factor attribution (R-squared)
-    attribution = factor_attribution(portfolio_returns, factor_returns)
-    
-    # Create target
-    target = ((drawdown < drawdown_threshold) & (attribution > factor_threshold)).astype(int)
+    # Create target (no attribution condition)
+    target = (drawdown < drawdown_threshold).astype(int)
     
     return target
