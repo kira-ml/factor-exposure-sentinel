@@ -31,6 +31,9 @@ def test_target_horizons():
     horizons = [5, 10, 15, 21, 30, 45, 60]
     results = []
     
+    train_end = "2018-12-31"
+    val_end = "2020-12-31"
+    
     for h in horizons:
         target = create_target(portfolio_returns, factors, horizon=h)
         features = create_features(returns[ETF_TICKERS], factors, portfolio_weights, macro_data=vix)
@@ -38,9 +41,8 @@ def test_target_horizons():
         features['fci_ma25'] = features['fci'].rolling(25).mean()
         features['ret_vol_60'] = portfolio_returns.rolling(60).std()
         
-        train_end = "2018-12-31"
         train_idx = features.loc[:train_end].dropna().index
-        test_idx = features.loc["2019-01-01":].dropna().index
+        val_idx = features.loc[train_end:val_end].dropna().index
         
         fci_threshold = features.loc[train_idx, 'fci'].quantile(0.95)
         signal = (features['fci'] > fci_threshold) & \
@@ -48,8 +50,8 @@ def test_target_horizons():
                  (features['vix_level'] > 19) & \
                  (features['ret_vol_60'] > 0.008)
         
-        y_pred = signal.loc[test_idx].astype(int)
-        y_true = target.loc[test_idx]
+        y_pred = signal.loc[val_idx].astype(int)
+        y_true = target.loc[val_idx]
         auc = roc_auc_score(y_true, y_pred)
         event_rate = y_true.mean()
         

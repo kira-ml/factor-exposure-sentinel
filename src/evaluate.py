@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 from sklearn.metrics import roc_auc_score, precision_recall_curve, confusion_matrix
+from sklearn.metrics import average_precision_score
+
 
 # Output directory
 OUTPUT_DIR = Path("D:/quant-finance-ml/factor-exposure-sentinel/outputs")
@@ -37,8 +39,8 @@ def evaluate_model(y_true: pd.Series, y_pred_proba: pd.Series, threshold: float 
     auc = roc_auc_score(y_true, y_pred_proba)
     
     # AUC-PR
-    precision, recall, _ = precision_recall_curve(y_true, y_pred_proba)
-    auc_pr = np.trapz(precision, recall)
+    auc_pr = average_precision_score(y_true, y_pred_proba)
+
     
     # Binary predictions at threshold
     y_pred = (y_pred_proba >= threshold).astype(int)

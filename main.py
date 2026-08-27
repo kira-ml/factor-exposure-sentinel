@@ -398,19 +398,23 @@ def main():
                 best_threshold = thresh
                 best_eval = eval_result
         
-        print(f"\n[16] Evaluating XGBoost (calibrated, threshold={best_threshold:.3f})...")
-        print_evaluation(best_eval)
-        
-        # Save results (skip feature importance for calibrated model)
-        run_id = save_results(
-            results=best_eval,
-            feature_names=None,
-            coefficients=None,
-            model_name="xgboost_calibrated"
-        )
-        print(f"   Run ID: {run_id}")
-        
-        xgb_eval = best_eval
+        if best_eval is not None:
+            print(f"\n[16] Evaluating XGBoost (calibrated, threshold={best_threshold:.3f})...")
+            print_evaluation(best_eval)
+            
+            # Save results (skip feature importance for calibrated model)
+            run_id = save_results(
+                results=best_eval,
+                feature_names=None,
+                coefficients=None,
+                model_name="xgboost_calibrated"
+            )
+            print(f"   Run ID: {run_id}")
+            
+            xgb_eval = best_eval
+        else:
+            print(f"\n   ⚠️ XGBoost: No valid threshold found (F1=0 for all thresholds)")
+            xgb_eval = None
         
     except ImportError as e:
         print(f"\n   ⚠️ XGBoost not available: {e}")

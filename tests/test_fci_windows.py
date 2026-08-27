@@ -36,9 +36,9 @@ def test_fci_windows():
     
     # Split
     train_end = "2018-12-31"
-    test_start = "2019-01-01"
+    val_end = "2020-12-31"
     train_idx = features.loc[:train_end].dropna().index
-    test_idx = features.loc[test_start:].dropna().index
+    val_idx = features.loc[train_end:val_end].dropna().index
     
     fci_threshold = features.loc[train_idx, 'fci'].quantile(0.90)
     
@@ -54,8 +54,8 @@ def test_fci_windows():
                  (features['fci'] > features[f'fci_ma{window}']) & \
                  (features['vix_level'] > 20)
         
-        y_pred = signal.loc[test_idx].astype(int)
-        y_true = target.loc[test_idx]
+        y_pred = signal.loc[val_idx].astype(int)
+        y_true = target.loc[val_idx]
         
         # Metrics
         auc = roc_auc_score(y_true, y_pred)

@@ -47,7 +47,13 @@ def rolling_betas(asset_returns: pd.DataFrame,
 
 def factor_concentration_index(betas: pd.DataFrame) -> pd.Series:
     abs_betas = betas.abs()
-    weights = abs_betas.div(abs_betas.sum(axis=1), axis=0)
+    row_sums = abs_betas.sum(axis=1)
+    
+    # Replace zeros with NaN to avoid division by zero
+    row_sums_safe = row_sums.replace(0, np.nan)
+    
+    # Divide and then fill NaN with 0
+    weights = abs_betas.div(row_sums_safe, axis=0).fillna(0)
     fci = (weights ** 2).sum(axis=1)
     return fci
 

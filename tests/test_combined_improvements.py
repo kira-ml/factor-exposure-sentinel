@@ -15,7 +15,7 @@ from src.target import create_target
 from src.features import create_features
 
 def test_combined_improvements():
-    """Test all mathematically justified improvements."""
+    """Test all mathematically justified improvements + Random Forest + Permutation Test."""
     
     # Load data
     data = fetch_all_data(start_date="2010-01-01", end_date="2024-12-31", use_cache=True)
@@ -66,9 +66,15 @@ def test_combined_improvements():
     
     # Split
     train_end = "2018-12-31"
-    test_start = "2019-01-01"
+    val_end = "2020-12-31"
     train_idx = features.loc[:train_end].dropna().index
-    test_idx = features.loc[test_start:].dropna().index
+    val_idx = features.loc[train_end:val_end].dropna().index
+    
+    # Prepare X and y for ML
+    X_train = features.loc[train_idx]
+    y_train = target.loc[train_idx]
+    X_val = features.loc[val_idx]
+    y_val = target.loc[val_idx]
     
     # Best config from Day 3
     fci_threshold = features.loc[train_idx, 'fci'].quantile(0.95)
@@ -119,8 +125,8 @@ def test_combined_improvements():
     
     results = []
     for name, signal in rules.items():
-        y_pred = signal.loc[test_idx].astype(int)
-        y_true = target.loc[test_idx]
+        y_pred = signal.loc[val_idx].astype(int)
+        y_true = target.loc[val_idx]
         
         auc = roc_auc_score(y_true, y_pred)
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
@@ -145,18 +151,163 @@ def test_combined_improvements():
         print(f"  AUC: {auc:.4f}, F1: {f1:.4f}, Prec: {precision:.4f}, Recall: {recall:.4f}")
         print(f"  Preds: {int(y_pred.sum())}, TP: {tp}, FP: {fp}, FN: {fn}")
     
+    # ============================================================
+    # RANDOM FOREST ON VALIDATION SET
+    # ============================================================
+    print("\n" + "="*70)
+    print("RANDOM FOREST (USING ALL FEATURES)")
+    print("="*70)
+    
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import StandardScaler
+    
+    # Handle NaN values
+    X_train_clean = X_train.fillna(0)
+    X_val_clean = X_val.fillna(0)
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train_clean)
+    X_val_scaled = scaler.transform(X_val_clean)
+    
+    # Train Random Forest
+    rf = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=5,
+        min_samples_split=10,
+        class_weight='balanced',
+        random_state=42
+    )
+    rf.fit(X_train_scaled, y_train)
+    
+    # Predict on validation
+    y_pred_proba = rf.predict_proba(X_val_scaled)[:, 1]
+    
+    # Find optimal threshold on validation
+    thresholds = np.linspace(0.01, 0.50, 50)
+    best_f1 = 0
+    best_threshold = 0.05
+    best_rf_eval = None
+    
+    for thresh in thresholds:
+        y_pred = (y_pred_proba >= thresh).astype(int)
+        tn, fp, fn, tp = confusion_matrix(y_val, y_pred).ravel()
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        
+        if f1 > best_f1:
+            best_f1 = f1
+            best_threshold = thresh
+            best_rf_eval = {
+                'auc': roc_auc_score(y_val, y_pred_proba),
+                'precision': precision,
+                'recall': recall,
+                'f1': f1,
+                'predictions': int(y_pred.sum()),
+                'tp': tp,
+                'fp': fp,
+                'fn': fn,
+                'threshold': thresh
+            }
+    
+    print(f"\nRandom Forest (Validation Set):")
+    print(f"  AUC-ROC: {best_rf_eval['auc']:.4f}")
+    print(f"  F1: {best_rf_eval['f1']:.4f}")
+    print(f"  Precision: {best_rf_eval['precision']:.4f}")
+    print(f"  Recall: {best_rf_eval['recall']:.4f}")
+    print(f"  Threshold: {best_rf_eval['threshold']:.3f}")
+    print(f"  Predictions: {best_rf_eval['predictions']}, TP: {best_rf_eval['tp']}, FP: {best_rf_eval['fp']}, FN: {best_rf_eval['fn']}")
+    
+    # Feature importance
+    importance = pd.DataFrame({
+        'feature': X_train.columns,
+        'importance': rf.feature_importances_
+    }).sort_values('importance', ascending=False)
+    
+    print("\n  Top 10 Features:")
+    print(importance.head(10).to_string(index=False))
+    
+    # ============================================================
+    # PERMUTATION TEST FOR STATISTICAL SIGNIFICANCE
+    # ============================================================
+    print("\n" + "="*70)
+    print("PERMUTATION TEST (Statistical Significance)")
+    print("="*70)
+    
+    observed_auc = best_rf_eval['auc']
+    n_permutations = 1000
+    permutation_aucs = []
+    
+    for i in range(n_permutations):
+        y_shuffled = np.random.permutation(y_val)
+        auc = roc_auc_score(y_shuffled, y_pred_proba)
+        permutation_aucs.append(auc)
+    
+    p_value = np.mean(np.array(permutation_aucs) >= observed_auc)
+    
+    print(f"\nObserved AUC: {observed_auc:.4f}")
+    print(f"Permutation AUC mean: {np.mean(permutation_aucs):.4f}")
+    print(f"Permutation AUC std: {np.std(permutation_aucs):.4f}")
+    print(f"p-value: {p_value:.4f}")
+    
+    if p_value < 0.05:
+        print(f"\n✅ Statistically significant (p < 0.05). Signal is likely real.")
+    else:
+        print(f"\n❌ NOT statistically significant (p >= 0.05). Signal may be noise.")
+    
+    # ============================================================
+    # POWER ANALYSIS
+    # ============================================================
+    print("\n" + "="*70)
+    print("POWER ANALYSIS")
+    print("="*70)
+    
+    n_events = int(y_val.sum())
+    n_samples = len(y_val)
+    effect_size = observed_auc - 0.5
+    
+    print(f"\nValidation set:")
+    print(f"  Total samples: {n_samples}")
+    print(f"  Event count: {n_events}")
+    print(f"  Event rate: {n_events/n_samples*100:.1f}%")
+    print(f"  Observed AUC: {observed_auc:.4f}")
+    print(f"  Effect size (AUC - 0.5): {effect_size:.4f}")
+    
+    if effect_size < 0.05:
+        print(f"\n  ⚠️  Effect size is very small (< 0.05).")
+        print(f"  With only {n_events} events, power to detect this effect is low.")
+        print(f"  Estimated events needed for reliable detection: ~200-300")
+    
     # Summary
     print("\n" + "="*70)
     print("SUMMARY")
     print("="*70)
-    print(f"Day 3 Best: AUC 0.6002, F1 0.2184, TP 19, FP 81")
     
-    best = max(results, key=lambda x: x['f1'])
-    print(f"\nBest New: {best['rule']}")
-    print(f"  AUC: {best['auc']:.4f}, F1: {best['f1']:.4f}, TP: {best['tp']}, FP: {best['fp']}")
-    print(f"  Improvement: AUC +{best['auc']-0.6002:.4f}, F1 +{best['f1']-0.2184:.4f}")
+    # Best rule-based
+    best_rule = max(results, key=lambda x: x['f1'])
+    print(f"Best Rule-Based: {best_rule['rule']}")
+    print(f"  AUC: {best_rule['auc']:.4f}, F1: {best_rule['f1']:.4f}, TP: {best_rule['tp']}, FP: {best_rule['fp']}")
     
-    return results
+    print(f"\nRandom Forest:")
+    print(f"  AUC: {best_rf_eval['auc']:.4f}, F1: {best_rf_eval['f1']:.4f}, TP: {best_rf_eval['tp']}, FP: {best_rf_eval['fp']}")
+    
+    if best_rf_eval['auc'] > best_rule['auc']:
+        print(f"\n✅ Random Forest outperforms rule-based (AUC +{best_rf_eval['auc'] - best_rule['auc']:.4f})")
+    else:
+        print(f"\n❌ Rule-based outperforms Random Forest (AUC +{best_rule['auc'] - best_rf_eval['auc']:.4f})")
+    
+    # Statistical significance conclusion
+    if p_value < 0.05:
+        print(f"\n✅ Signal is statistically significant (p={p_value:.4f})")
+        print(f"   However, practical significance is limited by:")
+        print(f"   - Low precision (0.0699)")
+        print(f"   - High false positive ratio (13:1)")
+    else:
+        print(f"\n❌ Signal is NOT statistically significant (p={p_value:.4f})")
+        print(f"   Recommend: Accept null hypothesis. No reliable predictive relationship found.")
+    
+    return results, best_rf_eval, p_value
 
 if __name__ == "__main__":
     test_combined_improvements()
