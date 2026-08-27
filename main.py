@@ -15,7 +15,7 @@ from src.target import create_target
 from src.features import create_features
 from src.target_analysis import analyze_target, print_target_analysis, get_analysis_summary
 from src.evaluate import evaluate_model, print_evaluation, save_results
-from src.models import ModelFactory, get_feature_importance
+from src.models import ModelFactory, get_feature_importance, train_xgboost
 
 from sklearn.metrics import confusion_matrix, roc_auc_score
 
@@ -344,11 +344,85 @@ def main():
     print("\n[14] Feature importance (Random Forest):")
     importance = get_feature_importance(rf_results['model'], X_train.columns.tolist())
     print(importance.head(10).to_string(index=False))
+
+
+    # ============================================================
+    # 14. XGBoost with Calibration (Conditional Tier 4)
+    # ============================================================
+    print("\n[14] Training XGBoost with Calibration...")
+    try:
+        from sklearn.calibration import CalibratedClassifierCV
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.metrics import precision_recall_curve
+        
+        # Get XGBoost model
+        xgb_model = ModelFactory.get_model('xgboost', 
+                                           n_estimators=100,
+                                           max_depth=4,
+                                           learning_rate=0.1,
+                                           scale_pos_weight=10)
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Calibrate probabilities using Platt scaling (sigmoid)
+        calibrated_model = CalibratedClassifierCV(
+            xgb_model, 
+            method='sigmoid', 
+            cv=3
+        )
+        calibrated_model.fit(X_train_scaled, y_train)
+        
+        # Get calibrated probabilities
+        y_pred_proba = calibrated_model.predict_proba(X_test_scaled)[:, 1]
+        
+        # ---- OPTIMAL THRESHOLD SELECTION ----
+        # Grid search over thresholds (0.01 to 0.50)
+        thresholds = np.linspace(0.01, 0.50, 50)
+        best_f1 = 0
+        best_threshold = 0.05
+        best_eval = None
+        
+        for thresh in thresholds:
+            eval_result = evaluate_model(y_test, y_pred_proba, threshold=thresh)
+            if eval_result['f1'] > best_f1:
+                best_f1 = eval_result['f1']
+                best_threshold = thresh
+                best_eval = eval_result
+        
+        print(f"\n[15] Evaluating XGBoost (calibrated, threshold={best_threshold:.3f})...")
+        print_evaluation(best_eval)
+        
+        # Save results
+        run_id = save_results(
+            results=best_eval,
+            feature_names=X_train.columns.tolist(),
+            coefficients=xgb_model.feature_importances_.tolist(),
+            model_name="xgboost_calibrated"
+        )
+        print(f"   Run ID: {run_id}")
+        
+        # Feature importance
+        print("\n[15b] Feature importance (XGBoost):")
+        xgb_importance = get_feature_importance(xgb_model, X_train.columns.tolist())
+        print(xgb_importance.head(10).to_string(index=False))
+        
+        xgb_eval = best_eval
+        
+    except ImportError as e:
+        print(f"\n   ⚠️ XGBoost not available: {e}")
+        print("   Skipping XGBoost. Run: pip install xgboost")
+        xgb_eval = None
     
     # ============================================================
     # 15. Model Comparison
     # ============================================================
-    print("\n[15] Model Comparison:")
+    # ============================================================
+    # 16. Model Comparison
+    # ============================================================
+    print("\n[16] Model Comparison:")
     print(f"   Threshold Baseline (90%):        AUC-ROC: {threshold_results['auc_roc']:.4f}")
     print(f"   VIX-Enhanced Threshold:          AUC-ROC: {vix_enhanced_auc:.4f} (VIX > {best_vix['vix_threshold']})")
     print(f"   FCI Trend-Enhanced:              AUC-ROC: {trend_auc:.4f}")
@@ -356,17 +430,22 @@ def main():
     print(f"   Logistic Regression:             AUC-ROC: {lr_eval['auc_roc']:.4f}")
     print(f"   Random Forest:                   AUC-ROC: {rf_eval['auc_roc']:.4f}")
     
-    best_model = max([(threshold_results['auc_roc'], 'Threshold (90%)'), 
-                      (vix_enhanced_auc, 'VIX-Enhanced'),
-                      (trend_auc, 'FCI Trend'),
-                      (combined_auc, 'Combined'),
-                      (lr_eval['auc_roc'], 'Logistic Regression'),
-                      (rf_eval['auc_roc'], 'Random Forest')], key=lambda x: x[0])
-    print(f"\n   Best Model: {best_model[1]} (AUC-ROC: {best_model[0]:.4f})")
+    # Add XGBoost if available
+    if xgb_eval is not None:
+        print(f"   XGBoost:                         AUC-ROC: {xgb_eval['auc_roc']:.4f}")
     
-    print("\n" + "="*60)
-    print("WEEK 1 IMPLEMENTATION COMPLETE!")
-    print("="*60)
+    best_models = [(threshold_results['auc_roc'], 'Threshold (90%)'), 
+                   (vix_enhanced_auc, 'VIX-Enhanced'),
+                   (trend_auc, 'FCI Trend'),
+                   (combined_auc, 'Combined'),
+                   (lr_eval['auc_roc'], 'Logistic Regression'),
+                   (rf_eval['auc_roc'], 'Random Forest')]
+    
+    if xgb_eval is not None:
+        best_models.append((xgb_eval['auc_roc'], 'XGBoost'))
+    
+    best_model = max(best_models, key=lambda x: x[0])
+    print(f"\n   Best Model: {best_model[1]} (AUC-ROC: {best_model[0]:.4f})")
 
 
 

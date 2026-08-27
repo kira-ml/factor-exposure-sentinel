@@ -30,7 +30,7 @@ class ModelFactory:
         Parameters:
         -----------
         model_name : str
-            Name of the model ('logistic_regression', 'random_forest')
+            Name of the model ('logistic_regression', 'random_forest', 'xgboost')
         **kwargs : dict
             Additional model parameters
         
@@ -42,6 +42,14 @@ class ModelFactory:
             'logistic_regression': LogisticRegression,
             'random_forest': RandomForestClassifier,
         }
+        
+        # XGBoost support
+        if model_name == 'xgboost':
+            try:
+                from xgboost import XGBClassifier
+                models['xgboost'] = XGBClassifier
+            except ImportError:
+                raise ImportError("XGBoost not installed. Run: pip install xgboost")
         
         if model_name not in models:
             raise ValueError(f"Model {model_name} not supported. Choose from: {list(models.keys())}")
@@ -58,6 +66,17 @@ class ModelFactory:
                 'class_weight': 'balanced',
                 'random_state': 42,
                 'n_jobs': -1,
+            },
+            'xgboost': {
+                'n_estimators': 100,
+                'max_depth': 4,
+                'learning_rate': 0.1,
+                'subsample': 0.8,
+                'colsample_bytree': 0.8,
+                'scale_pos_weight': 10,
+                'random_state': 42,
+                'eval_metric': 'logloss',
+                'use_label_encoder': False,
             }
         }
         
@@ -174,37 +193,40 @@ def get_feature_importance(model, feature_names: list) -> pd.DataFrame:
     }).sort_values(name, key=abs, ascending=False)
 
 
-# Simple wrapper functions for backward compatibility
 def train_logistic_regression(X_train, y_train, X_test, y_test, use_smote=True):
-    """
-    Train logistic regression with optional SMOTE.
-    """
+    """Train logistic regression with optional SMOTE."""
     model = ModelFactory.get_model('logistic_regression')
     return ModelFactory.train_and_evaluate(
         model, X_train, y_train, X_test, y_test, use_smote=use_smote
     )
 
 
-# Add to src/models.py (at the end, after train_logistic_regression)
-
 def train_random_forest(X_train, y_train, X_test, y_test, use_smote=False, n_estimators=100):
+    """Train Random Forest with optional SMOTE."""
+    model = ModelFactory.get_model('random_forest', n_estimators=n_estimators)
+    return ModelFactory.train_and_evaluate(
+        model, X_train, y_train, X_test, y_test, use_smote=use_smote
+    )
+
+
+def train_xgboost(X_train, y_train, X_test, y_test, use_smote=False, **kwargs):
     """
-    Train Random Forest with optional SMOTE.
+    Train XGBoost classifier.
     
     Parameters:
     -----------
     X_train, y_train, X_test, y_test : array-like
         Training and test data
     use_smote : bool
-        Whether to apply SMOTE (default False - Random Forest handles imbalance well)
-    n_estimators : int
-        Number of trees in the forest
+        Whether to apply SMOTE (default False)
+    **kwargs : dict
+        Additional XGBoost parameters
     
     Returns:
     --------
     dict with model, predictions, and evaluation results
     """
-    model = ModelFactory.get_model('random_forest', n_estimators=n_estimators)
+    model = ModelFactory.get_model('xgboost', **kwargs)
     return ModelFactory.train_and_evaluate(
         model, X_train, y_train, X_test, y_test, use_smote=use_smote
     )

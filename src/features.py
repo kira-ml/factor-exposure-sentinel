@@ -70,6 +70,30 @@ def factor_concentration_index(betas: pd.DataFrame) -> pd.Series:
     return fci
 
 
+def rolling_factor_correlation(factor_returns: pd.DataFrame, window: int = 60) -> pd.Series:
+    """
+    Calculate mean pairwise correlation of factors.
+    
+    Parameters:
+    -----------
+    factor_returns : pd.DataFrame
+        Factor returns
+    window : int
+        Rolling window for correlation
+    
+    Returns:
+    --------
+    pd.Series with mean pairwise correlation
+    """
+    corr_series = pd.Series(index=factor_returns.index, dtype=float)
+    for i in range(window, len(factor_returns)):
+        corr = factor_returns.iloc[i-window:i].corr()
+        # Mean of upper triangle (excluding diagonal)
+        upper_tri = corr.values[np.triu_indices_from(corr.values, k=1)]
+        corr_series.iloc[i] = np.nanmean(upper_tri)
+    return corr_series
+
+
 def portfolio_hhi(weights: pd.DataFrame) -> pd.Series:
     """
     Calculate Herfindahl-Hirschman Index for portfolio weights.
@@ -132,11 +156,32 @@ def create_features(asset_returns: pd.DataFrame,
     for factor in betas.columns:
         features[f'beta_{factor}'] = betas[factor]
     
-    
     # Add macro features if available
     if macro_data is not None:
         features['vix_level'] = macro_data
         features['vix_change'] = macro_data.pct_change()
         features['vix_vol'] = macro_data.rolling(20).std()
+    
+    # ---- MATHEMATICALLY JUSTIFIED FEATURES ----
+    # (Added AFTER macro_data is processed so vix_level exists)
+    
+    # 1. FCI change features (velocity of concentration)
+    features['fci_change_5'] = features['fci'].diff(5)
+    features['fci_change_10'] = features['fci'].diff(10)
+    features['fci_change_20'] = features['fci'].diff(20)
+    features['fci_change_30'] = features['fci'].diff(30)
+    
+    # 2. FCI / VIX ratio (interaction)
+    if macro_data is not None:
+        features['fci_vix_ratio'] = features['fci'] / (features['vix_level'] + 1)
+    
+    # 3. Log transformations for skewed features
+    if macro_data is not None:
+        features['log_vix'] = np.log(features['vix_level'] + 1)
+    features['log_fci'] = np.log(features['fci'] + 0.001)
+    
+    # 4. Factor correlation (crowding proxy)
+    features['factor_corr_60'] = rolling_factor_correlation(factor_returns, window=60)
+    features['factor_corr_120'] = rolling_factor_correlation(factor_returns, window=120)
     
     return features
