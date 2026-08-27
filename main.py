@@ -116,20 +116,26 @@ def main():
     print("\n   Bottom correlations with target:")
     print(correlations.tail(5))
     
-    # 5. Prepare train/test split
-    print("\n[5] Preparing train/test split...")
+    # 5. Prepare train/validation/test split
+    print("\n[5] Preparing train/validation/test split...")
     train_end = "2018-12-31"
-    test_start = "2019-01-01"
-    
+    val_end = "2020-12-31"
+    test_start = "2021-01-01"
+
     train_idx = features.loc[:train_end].dropna().index
+    val_idx = features.loc[train_end:val_end].dropna().index
     test_idx = features.loc[test_start:].dropna().index
-    
+
     X_train = features.loc[train_idx]
     y_train = target.loc[train_idx]
+    X_val = features.loc[val_idx]
+    y_val = target.loc[val_idx]
     X_test = features.loc[test_idx]
     y_test = target.loc[test_idx]
-    
-    print(f"   Train: {len(X_train)} samples, Test: {len(X_test)} samples")
+
+    print(f"   Train: {len(X_train)} samples")
+    print(f"   Validation: {len(X_val)} samples")
+    print(f"   Test: {len(X_test)} samples")
     
     # ============================================================
     # 6. THRESHOLD SENSITIVITY ANALYSIS
@@ -207,13 +213,13 @@ def main():
         # Rule: FCI > 90th percentile AND VIX > vix_t
         signal = (features['fci'] > fci_threshold) & (features['vix_level'] > vix_t)
         
-        # Evaluate on test
-        y_pred_test = signal.loc[test_idx].astype(int)
-        y_true_test = target.loc[test_idx]
+        # Evaluate on validation set (tuning)
+        y_pred_val = signal.loc[val_idx].astype(int) 
+        y_true_val = target.loc[val_idx]
         
-        tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
+        tn, fp, fn, tp = confusion_matrix(y_true_val, y_pred_val).ravel()
         
-        auc = roc_auc_score(y_true_test, y_pred_test)
+        auc = roc_auc_score(y_true_val, y_pred_val)
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
@@ -224,7 +230,7 @@ def main():
             'precision': precision,
             'recall': recall,
             'f1': f1,
-            'predictions': int(y_pred_test.sum()),
+            'predictions': int(y_pred_val.sum()),
             'tp': tp,
             'fp': fp,
             'fn': fn,
@@ -238,7 +244,7 @@ def main():
     for r in vix_enhanced_results:
         print(f"   {r['vix_threshold']:>8} | {r['auc']:>8.4f} | {r['f1']:>8.4f} | {r['precision']:>8.4f} | {r['recall']:>8.4f} | {r['predictions']:>8} | {r['tp']:>6}")
     
-    # Find best VIX threshold by F1
+    # Find best VIX threshold by F1 on validation set
     best_vix = max(vix_enhanced_results, key=lambda x: x['f1'])
     print(f"\n   Best VIX threshold: {best_vix['vix_threshold']} (F1: {best_vix['f1']:.4f}, AUC: {best_vix['auc']:.4f})")
     
@@ -258,12 +264,12 @@ def main():
     # Rule: FCI > 90th percentile AND FCI > 20-day MA
     signal_trend = (features['fci'] > fci_threshold) & (features['fci_trend'] == 1)
     
-    # Evaluate on test
-    y_pred_test = signal_trend.loc[test_idx].astype(int)
-    y_true_test = target.loc[test_idx]
+    # Evaluate on validation set (tuning)
+    y_pred_val = signal_trend.loc[val_idx].astype(int)
+    y_true_val = target.loc[val_idx]
     
-    tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
-    trend_auc = roc_auc_score(y_true_test, y_pred_test)
+    tn, fp, fn, tp = confusion_matrix(y_true_val, y_pred_val).ravel()
+    trend_auc = roc_auc_score(y_true_val, y_pred_val)
     trend_precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     trend_recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     trend_f1 = 2 * trend_precision * trend_recall / (trend_precision + trend_recall) if (trend_precision + trend_recall) > 0 else 0
@@ -273,16 +279,17 @@ def main():
     print(f"   F1: {trend_f1:.4f}")
     print(f"   Precision: {trend_precision:.4f}")
     print(f"   Recall: {trend_recall:.4f}")
-    print(f"   Predictions: {int(y_pred_test.sum())}, TP: {tp}")
+    print(f"   Predictions: {int(y_pred_val.sum())}, TP: {tp}")
     
     # Combined: FCI > 90% AND FCI > MA20 AND VIX > 20
     signal_combined = (features['fci'] > fci_threshold) & (features['fci_trend'] == 1) & (features['vix_level'] > 20)
     
-    y_pred_test = signal_combined.loc[test_idx].astype(int)
-    y_true_test = target.loc[test_idx]
+    # Evaluate on validation set (tuning)
+    y_pred_val = signal_combined.loc[val_idx].astype(int)
+    y_true_val = target.loc[val_idx]
     
-    tn, fp, fn, tp = confusion_matrix(y_true_test, y_pred_test).ravel()
-    combined_auc = roc_auc_score(y_true_test, y_pred_test)
+    tn, fp, fn, tp = confusion_matrix(y_true_val, y_pred_val).ravel()
+    combined_auc = roc_auc_score(y_true_val, y_pred_val)
     combined_precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     combined_recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     combined_f1 = 2 * combined_precision * combined_recall / (combined_precision + combined_recall) if (combined_precision + combined_recall) > 0 else 0
@@ -292,7 +299,7 @@ def main():
     print(f"   F1: {combined_f1:.4f}")
     print(f"   Precision: {combined_precision:.4f}")
     print(f"   Recall: {combined_recall:.4f}")
-    print(f"   Predictions: {int(y_pred_test.sum())}, TP: {tp}")
+    print(f"   Predictions: {int(y_pred_val.sum())}, TP: {tp}")
     
     # ============================================================
     # 10. Logistic Regression (Tier 2)

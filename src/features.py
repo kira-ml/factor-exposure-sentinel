@@ -46,27 +46,9 @@ def rolling_betas(asset_returns: pd.DataFrame,
 
 
 def factor_concentration_index(betas: pd.DataFrame) -> pd.Series:
-    """
-    Calculate Factor Concentration Index (FCI).
-    
-    FCI = sum(beta_k^2) / (sum(|beta_k|))^2
-    
-    Parameters:
-    -----------
-    betas : pd.DataFrame
-        Rolling betas for each factor
-    
-    Returns:
-    --------
-    pd.Series with FCI values (0-1, higher = more concentrated)
-    """
-    numerator = (betas ** 2).sum(axis=1)
-    denominator = (betas.abs().sum(axis=1)) ** 2
-    
-    # Handle division by zero by setting FCI to 0 when denominator is 0
-    fci = numerator / denominator.replace(0, np.nan)
-    fci = fci.fillna(0)  # Fill NaN (from division by zero) with 0
-    
+    abs_betas = betas.abs()
+    weights = abs_betas.div(abs_betas.sum(axis=1), axis=0)
+    fci = (weights ** 2).sum(axis=1)
     return fci
 
 

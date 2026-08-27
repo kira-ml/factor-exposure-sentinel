@@ -34,36 +34,56 @@ def factor_attribution(portfolio_returns: pd.Series,
                        factor_returns: pd.DataFrame,
                        window: int = 252) -> pd.Series:
     """
-    Calculate rolling factor attribution using linear regression.
+    Calculate factor attribution for each date t by estimating betas using
+    the trailing window and then applying them to the forward period.
     
-    Parameters:
-    -----------
-    portfolio_returns : pd.Series
-        Portfolio returns
-    factor_returns : pd.DataFrame
-        Factor returns (Fama-French 5-factor)
-    window : int
-        Rolling window for regression
-    
-    Returns:
-    --------
-    pd.Series with R-squared of factor model (factor attribution)
+    Returns the proportion of forward portfolio return explained by factors.
     """
-    # Use simple R-squared as factor attribution proxy
     from sklearn.linear_model import LinearRegression
+    import warnings
     
-    r2_series = pd.Series(index=portfolio_returns.index, dtype=float)
+    attribution_series = pd.Series(index=portfolio_returns.index, dtype=float)
     
     for i in range(window, len(portfolio_returns)):
-        X = factor_returns.iloc[i-window:i].values
-        y = portfolio_returns.iloc[i-window:i].values
+        # Estimate betas using trailing window (point-in-time)
+        X_train = factor_returns.iloc[i-window:i].values
+        y_train = portfolio_returns.iloc[i-window:i].values
         
-        if len(X) == window and not np.any(np.isnan(X)) and not np.any(np.isnan(y)):
-            model = LinearRegression()
-            model.fit(X, y)
-            r2_series.iloc[i] = model.score(X, y)
+        if np.any(np.isnan(X_train)) or np.any(np.isnan(y_train)):
+            continue
+            
+        model = LinearRegression()
+        model.fit(X_train, y_train)
+        betas = model.coef_
+        
+        # Apply betas to the forward period (the next 21 days)
+        # Get the actual factor returns during the forward period
+        forward_end = min(i + 21, len(portfolio_returns))
+        X_forward = factor_returns.iloc[i:forward_end].values
+        y_forward = portfolio_returns.iloc[i:forward_end].values
+        
+        if len(X_forward) == 0 or np.any(np.isnan(X_forward)) or np.any(np.isnan(y_forward)):
+            continue
+        
+        # Predicted returns from factors
+        y_pred = X_forward @ betas
+        
+        # Total forward return (actual portfolio return)
+        total_return = np.sum(y_forward)
+        
+        # Factor contribution (sum of predicted returns)
+        factor_return = np.sum(y_pred)
+        
+        # Avoid division by zero
+        if abs(total_return) < 1e-10:
+            continue
+        
+        # Proportion of return explained by factors (absolute values)
+        # Clamp between 0 and 1 to handle edge cases
+        attribution = min(abs(factor_return / total_return), 1.0)
+        attribution_series.iloc[i] = attribution
     
-    return r2_series
+    return attribution_series
 
 def create_target(portfolio_returns: pd.Series,
                   factor_returns: pd.DataFrame,
