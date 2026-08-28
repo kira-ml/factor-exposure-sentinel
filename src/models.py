@@ -73,7 +73,7 @@ class ModelFactory:
                 'learning_rate': 0.1,
                 'subsample': 0.8,
                 'colsample_bytree': 0.8,
-                'scale_pos_weight': 10,
+                'scale_pos_weight': 20,
                 'random_state': 42,
                 'eval_metric': 'logloss',
                 'use_label_encoder': False,

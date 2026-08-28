@@ -232,7 +232,16 @@ def create_features(asset_returns: pd.DataFrame,
         features['credit_spread'] = credit_spread.reindex(features.index)
         features['credit_spread_change'] = features['credit_spread'].pct_change()
 
+    # Regime persistence features (reduces false positives)
+    features['fci_high'] = (features['fci'] > features['fci'].rolling(252).quantile(0.85)).astype(int)
+    features['fci_persistence'] = features['fci_high'].rolling(10).sum()
     
+    features['vix_high'] = (features['vix_level'] > features['vix_level'].rolling(252).quantile(0.80)).astype(int)
+    features['vix_persistence'] = features['vix_high'].rolling(5).sum()
+    
+    features['stress_confirm'] = ((features['fci_high'] == 1) & (features['vix_high'] == 1)).astype(int)
+    features['stress_persistence'] = features['stress_confirm'].rolling(5).sum()
+
     return features
 
 
