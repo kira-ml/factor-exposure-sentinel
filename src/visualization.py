@@ -286,6 +286,10 @@ def plot_model_comparison(results_df, save=True):
     ci_lower = np.nan_to_num(ci_lower, nan=0.4, posinf=0.6, neginf=0.3)
     ci_upper = np.nan_to_num(ci_upper, nan=0.6, posinf=0.7, neginf=0.5)
 
+    # Ensure ci_lower is never greater than auc (prevents negative error)
+    ci_lower = np.minimum(ci_lower, aucs - 0.01)
+    ci_upper = np.maximum(ci_upper, aucs + 0.01)
+
     # Color based on significance
     colors_bar = ['#2ECC71' if (lower > 0.5) else '#E74C3C'
                   for lower in ci_lower]
