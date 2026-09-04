@@ -51,8 +51,14 @@ plt.rcParams.update({
 
 def save_fig(fig, filename):
     """Save figure to output folder as PNG. NO bbox_inches='tight'."""
-    path = str(FIGURES_DIR / f"{filename}.png")  # Convert to string explicitly
-    fig.savefig(path, dpi=300, facecolor='white', format='png')  # Specify format
+    # Ensure directory exists
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Use Path object directly
+    path = FIGURES_DIR / f"{filename}.png"
+    
+    # Save with explicit path
+    fig.savefig(str(path), dpi=300, facecolor='white', format='png')
     plt.close(fig)
     print(f"   ✅ Saved: {path}")
 

@@ -24,11 +24,13 @@ def calculate_drawdown(returns: pd.Series, window: int = 21) -> pd.Series:
     --------
     pd.Series with drawdown values
     """
-    # Forward rolling window drawdown
-    drawdown = returns.rolling(window=window).apply(
+    # Calculate cumulative return over rolling window
+    forward_return = returns.rolling(window=window).apply(
         lambda x: (x + 1).prod() - 1
     )
-    return drawdown.shift(-window)  # Shift forward to avoid look-ahead
+    # Shift to align the forward return with the start date
+    # shift(-window) aligns t+window → t
+    return forward_return.shift(-window)
 
 def factor_attribution(portfolio_returns: pd.Series, 
                        factor_returns: pd.DataFrame,

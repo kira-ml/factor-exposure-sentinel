@@ -73,13 +73,55 @@ def evaluate_model(y_true: pd.Series, y_pred_proba: pd.Series, threshold: float 
 def bootstrap_confidence_interval(y_true, y_pred_proba, n_iterations=1000, ci=0.95):
     """
     Calculate bootstrap confidence interval for AUC.
+    For small n, use a bias-corrected approach.
     If the CI includes 0.5, your model is not better than random.
     """
-    aucs = []
+    from sklearn.metrics import roc_auc_score
+    import numpy as np
+    
     n = len(y_true)
     y_true = np.array(y_true)
     y_pred_proba = np.array(y_pred_proba)
     
+    # If too few positives, use Clopper-Pearson style CI on precision/recall
+    if y_true.sum() < 30:
+        pos_count = y_true.sum()
+        auc = roc_auc_score(y_true, y_pred_proba)
+        
+        # Bootstrap for std error (with fewer iterations for speed)
+        aucs = []
+        for _ in range(min(n_iterations, 500)):
+            idx = np.random.choice(n, n, replace=True)
+            y_true_boot = y_true[idx]
+            y_pred_boot = y_pred_proba[idx]
+            if len(np.unique(y_true_boot)) < 2:
+                continue
+            aucs.append(roc_auc_score(y_true_boot, y_pred_boot))
+        
+        if len(aucs) < 100:
+            # Fallback: use approximate standard error
+            q1 = auc / (2 - auc)
+            q2 = (2 * auc ** 2) / (1 + auc)
+            se = np.sqrt((auc * (1 - auc) + (pos_count - 1) * (q1 - auc ** 2) + 
+                         (n - pos_count - 1) * (q2 - auc ** 2)) / (pos_count * (n - pos_count)))
+        else:
+            se = np.std(aucs)
+            
+        lower = max(0, auc - 1.96 * se)
+        upper = min(1, auc + 1.96 * se)
+        
+        return {
+            'mean': auc,
+            'std': se,
+            'ci_lower': lower,
+            'ci_upper': upper,
+            'ci_width': upper - lower,
+            'includes_0.5': lower < 0.5 < upper,
+            'is_significant': lower > 0.5
+        }
+    
+    # Standard bootstrap for larger samples
+    aucs = []
     for _ in range(n_iterations):
         indices = np.random.choice(n, n, replace=True)
         y_true_boot = y_true[indices]
@@ -108,14 +150,21 @@ def bootstrap_confidence_interval(y_true, y_pred_proba, n_iterations=1000, ci=0.
 def test_calibration(y_true, y_pred_proba, n_bins=10):
     """
     Test if predicted probabilities are well-calibrated.
-    Poor calibration means you can't trust the probability values.
+    Uses fixed bin edges for consistent ECE calculation.
     Returns Expected Calibration Error (ECE).
     """
     from sklearn.calibration import calibration_curve
+    import numpy as np
     
-    prob_true, prob_pred = calibration_curve(y_true, y_pred_proba, n_bins=n_bins)
+    # Use fixed bin edges (ensures consistent bins regardless of data)
+    bin_edges = np.linspace(0, 1, n_bins + 1)
     
-    # Handle case where calibration_curve returns fewer bins
+    # Get calibration curve with fixed bins
+    prob_true, prob_pred = calibration_curve(
+        y_true, y_pred_proba, n_bins=n_bins, strategy='uniform'
+    )
+    
+    # Handle edge cases
     if len(prob_true) < 2:
         return {
             'ece': 1.0,
@@ -123,25 +172,25 @@ def test_calibration(y_true, y_pred_proba, n_bins=10):
             'warning': 'Insufficient probability range for calibration'
         }
     
-    # Calculate ECE - only for bins that have data
-    bin_counts = np.histogram(y_pred_proba, bins=n_bins, range=(0, 1))[0]
-    bin_weights = bin_counts / len(y_true)
+    # Calculate ECE with fixed bins
+    bin_indices = np.digitize(y_pred_proba, bin_edges, right=False)
+    bin_indices = np.clip(bin_indices, 1, n_bins) - 1
     
-    # Align lengths - take only bins that exist in calibration_curve
-    # prob_true and prob_pred may have fewer bins than n_bins
-    n_actual_bins = len(prob_true)
-    bin_weights_aligned = bin_weights[:n_actual_bins]
-    
-    # Normalize to sum to 1 for actual bins
-    if bin_weights_aligned.sum() > 0:
-        bin_weights_aligned = bin_weights_aligned / bin_weights_aligned.sum()
-    
-    ece = np.sum(bin_weights_aligned * np.abs(prob_true - prob_pred))
+    ece = 0.0
+    for i in range(n_bins):
+        mask = bin_indices == i
+        if not np.any(mask):
+            continue
+        bin_acc = y_true[mask].mean()
+        bin_conf = y_pred_proba[mask].mean()
+        bin_weight = mask.sum() / len(y_true)
+        ece += bin_weight * abs(bin_acc - bin_conf)
     
     return {
         'ece': ece,
         'is_calibrated': ece < 0.10,
-        'n_bins_used': n_actual_bins
+        'n_bins_used': n_bins,
+        'n_bins_populated': len(prob_true)
     }
 
 def evaluate_with_rigor(y_true, y_pred_proba, threshold=0.5):

@@ -27,28 +27,18 @@ def rolling_betas(asset_returns: pd.DataFrame,
                   window: int = 252) -> pd.DataFrame:
     """
     Calculate rolling factor betas for each asset.
-    
-    Parameters:
-    -----------
-    asset_returns : pd.DataFrame
-        Asset returns (each column is an asset)
-    factor_returns : pd.DataFrame
-        Factor returns
-    window : int
-        Rolling window for beta estimation
-    
-    Returns:
-    --------
-    pd.DataFrame with betas for each factor (averaged across assets)
+    Uses data up to i-1 to avoid look-ahead bias.
     """
     betas = pd.DataFrame(index=asset_returns.index, 
                         columns=factor_returns.columns)
     
     for i in range(window, len(asset_returns)):
-        X = factor_returns.iloc[i-window:i].values
-        y = asset_returns.iloc[i-window:i].values
+        # Use data up to i-1 (exclude current day)
+        X = factor_returns.iloc[i-window:i-1].values
+        y = asset_returns.iloc[i-window:i-1].values
         
-        if len(X) == window and not np.any(np.isnan(X)) and not np.any(np.isnan(y)):
+        # Need at least window-1 observations
+        if len(X) == window - 1 and not np.any(np.isnan(X)) and not np.any(np.isnan(y)):
             model = LinearRegression()
             model.fit(X, y)
             # Average betas across all assets

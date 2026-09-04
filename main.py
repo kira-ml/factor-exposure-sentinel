@@ -41,8 +41,9 @@ def evaluate_threshold_rule(features, target, train_idx, test_idx,
         signal = signal & (features['vix_level'] > vix_threshold)
     
     if trend:
-        features['fci_ma20'] = features['fci'].rolling(20).mean()
-        signal = signal & (features['fci'] > features['fci_ma20'])
+        fci_ma20 = features['fci'].rolling(20).mean()
+        signal = signal & (features['fci'] > fci_ma20)
+        # Don't assign to features
     
     # Evaluate on test data
     y_pred = signal.loc[test_idx].astype(int)
@@ -171,45 +172,65 @@ def main():
     # 8. LOGISTIC REGRESSION (Baseline ML)
     # ============================================================
     print("\n[8] Logistic Regression (with SMOTE)...")
-    lr_model = ModelFactory.get_model('logistic_regression')
-    lr_results = ModelFactory.train_and_evaluate(
-        lr_model, X_train, y_train, X_val, y_val, use_smote=True
-    )
-    lr_eval = evaluate_with_rigor(y_val, lr_results['y_pred_proba'], 
-                                  threshold=lr_results['optimal_threshold'])
-    print(f"   Validation AUC: {lr_eval['auc_roc']:.4f}")
-    print(f"   Optimal threshold: {lr_results['optimal_threshold']:.3f}")
     
-    # Evaluate on test
+    # First, train on validation to find optimal threshold
+    lr_model_val = ModelFactory.get_model('logistic_regression')
+    lr_val_results = ModelFactory.train_and_evaluate(
+        lr_model_val, X_train, y_train, X_val, y_val, use_smote=True
+    )
+    
+    # Find best threshold on validation (max F1)
+    thresholds = np.linspace(0.01, 0.50, 50)
+    best_lr_threshold = 0.05
+    best_lr_f1 = 0
+    for thresh in thresholds:
+        eval_result = evaluate_with_rigor(y_val, lr_val_results['y_pred_proba'], threshold=thresh)
+        if eval_result['f1'] > best_lr_f1:
+            best_lr_f1 = eval_result['f1']
+            best_lr_threshold = thresh
+    
+    print(f"   Best validation threshold: {best_lr_threshold:.3f} (F1: {best_lr_f1:.4f})")
+    
+    # Train final model on full training data and evaluate on test
     lr_model_final = ModelFactory.get_model('logistic_regression')
     lr_final = ModelFactory.train_and_evaluate(
         lr_model_final, X_train, y_train, X_test, y_test, 
-        use_smote=True, threshold_method='default', default_threshold=0.05
+        use_smote=True, threshold_method='default', default_threshold=best_lr_threshold
     )
     lr_test = evaluate_with_rigor(y_test, lr_final['y_pred_proba'], 
-                                  threshold=0.05)
+                                  threshold=best_lr_threshold)
     print(f"   Test AUC: {lr_test['auc_roc']:.4f} (CI: [{lr_test['ci_lower']:.4f}, {lr_test['ci_upper']:.4f}])")
     
     # ============================================================
     # 9. RANDOM FOREST (Intermediate)
     # ============================================================
     print("\n[9] Random Forest...")
-    rf_model = ModelFactory.get_model('random_forest', n_estimators=100)
-    rf_results = ModelFactory.train_and_evaluate(
-        rf_model, X_train, y_train, X_val, y_val, use_smote=False
-    )
-    rf_eval = evaluate_with_rigor(y_val, rf_results['y_pred_proba'], 
-                                  threshold=rf_results['optimal_threshold'])
-    print(f"   Validation AUC: {rf_eval['auc_roc']:.4f}")
     
-    # Evaluate on test
+    # First, train on validation to find optimal threshold
+    rf_model_val = ModelFactory.get_model('random_forest', n_estimators=100)
+    rf_val_results = ModelFactory.train_and_evaluate(
+        rf_model_val, X_train, y_train, X_val, y_val, use_smote=False
+    )
+    
+    # Find best threshold on validation (max F1)
+    best_rf_threshold = 0.05
+    best_rf_f1 = 0
+    for thresh in thresholds:
+        eval_result = evaluate_with_rigor(y_val, rf_val_results['y_pred_proba'], threshold=thresh)
+        if eval_result['f1'] > best_rf_f1:
+            best_rf_f1 = eval_result['f1']
+            best_rf_threshold = thresh
+    
+    print(f"   Best validation threshold: {best_rf_threshold:.3f} (F1: {best_rf_f1:.4f})")
+    
+    # Train final model on full training data and evaluate on test
     rf_model_final = ModelFactory.get_model('random_forest', n_estimators=100)
     rf_final = ModelFactory.train_and_evaluate(
         rf_model_final, X_train, y_train, X_test, y_test, 
-        use_smote=False, threshold_method='default', default_threshold=0.05
+        use_smote=False, threshold_method='default', default_threshold=best_rf_threshold
     )
     rf_test = evaluate_with_rigor(y_test, rf_final['y_pred_proba'], 
-                                  threshold=0.05)
+                                  threshold=best_rf_threshold)
     print(f"   Test AUC: {rf_test['auc_roc']:.4f} (CI: [{rf_test['ci_lower']:.4f}, {rf_test['ci_upper']:.4f}])")
     
     # ============================================================
@@ -239,23 +260,22 @@ def main():
         y_pred_proba_val = calibrated_model.predict_proba(X_val_scaled)[:, 1]
         
         # Find optimal threshold on validation (max F1)
-        thresholds = np.linspace(0.01, 0.50, 50)
-        best_f1 = 0
-        best_threshold = 0.05
-        best_val_auc = 0
+        best_xgb_threshold = 0.05
+        best_xgb_f1 = 0
+        best_xgb_val_auc = 0
         
         for thresh in thresholds:
             eval_result = evaluate_with_rigor(y_val, y_pred_proba_val, threshold=thresh)
-            if eval_result['f1'] > best_f1:
-                best_f1 = eval_result['f1']
-                best_threshold = thresh
-                best_val_auc = eval_result['auc_roc']
+            if eval_result['f1'] > best_xgb_f1:
+                best_xgb_f1 = eval_result['f1']
+                best_xgb_threshold = thresh
+                best_xgb_val_auc = eval_result['auc_roc']
         
-        print(f"   Best validation threshold: {best_threshold:.3f} (F1: {best_f1:.4f}, AUC: {best_val_auc:.4f})")
+        print(f"   Best validation threshold: {best_xgb_threshold:.3f} (F1: {best_xgb_f1:.4f}, AUC: {best_xgb_val_auc:.4f})")
         
         # Test with best threshold
         y_pred_proba_test = calibrated_model.predict_proba(X_test_scaled)[:, 1]
-        xgb_test = evaluate_with_rigor(y_test, y_pred_proba_test, threshold=best_threshold)
+        xgb_test = evaluate_with_rigor(y_test, y_pred_proba_test, threshold=best_xgb_threshold)
         print(f"   Test AUC: {xgb_test['auc_roc']:.4f} (CI: [{xgb_test['ci_lower']:.4f}, {xgb_test['ci_upper']:.4f}])")
         print(f"   Test F1: {xgb_test['f1']:.4f} (Precision: {xgb_test['precision']:.4f}, Recall: {xgb_test['recall']:.4f})")
         
