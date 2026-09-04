@@ -155,6 +155,11 @@ def evaluate_with_rigor(y_true, y_pred_proba, threshold=0.5):
     bootstrap = bootstrap_confidence_interval(y_true, y_pred_proba)
     results['bootstrap'] = bootstrap
     
+    # Add CI to top-level for easy access
+    results['ci_lower'] = bootstrap['ci_lower']
+    results['ci_upper'] = bootstrap['ci_upper']
+    results['is_significant'] = bootstrap['is_significant']
+    
     # Calibration
     calibration = test_calibration(y_true, y_pred_proba)
     results['calibration'] = calibration
@@ -270,6 +275,10 @@ def save_results(results: dict, feature_names: list = None, coefficients: list =
         'is_significant': results.get('bootstrap', {}).get('is_significant', False),
         'ece': results.get('calibration', {}).get('ece', np.nan),
         'verdict': results.get('verdict', 'UNKNOWN'),
+        # Add these for better tracking
+        'precision_at_threshold': results['precision'],
+        'recall_at_threshold': results['recall'],
+        'predictions_count': results['predictions_at_threshold'],
     }
     
     # Append to CSV (create if doesn't exist)

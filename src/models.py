@@ -89,7 +89,8 @@ class ModelFactory:
     @staticmethod
     def train_and_evaluate(model, X_train, y_train, X_test, y_test, 
                           use_smote: bool = False, 
-                          threshold_method: str = 'f1'):
+                          threshold_method: str = 'f1',
+                          default_threshold: float = 0.05):
         """
         Train model and evaluate on test data.
         
@@ -107,8 +108,10 @@ class ModelFactory:
             Test labels
         use_smote : bool
             Whether to apply SMOTE for class imbalance
-        threshold_method : str
-            Method to determine threshold ('f1', 'precision_recall', or float)
+        threshold_method : str or float
+            Method to determine threshold ('f1', 'precision_recall', float, or 'default')
+        default_threshold : float
+            Default threshold when threshold_method='default' (0.05 for high recall)
         
         Returns:
         --------
@@ -147,6 +150,8 @@ class ModelFactory:
             precision, recall, thresholds = precision_recall_curve(y_train, train_proba)
             f1_scores = 2 * precision * recall / (precision + recall + 1e-10)
             optimal_threshold = thresholds[np.argmax(f1_scores[:-1])] if len(thresholds) > 0 else 0.5
+        elif threshold_method == 'default':
+            optimal_threshold = default_threshold  # Use 0.05 for test
         else:
             optimal_threshold = 0.5
         
