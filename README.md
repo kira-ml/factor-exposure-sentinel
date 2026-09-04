@@ -2,9 +2,10 @@
 
 **Author:** Ken Ira Lacson Talingting  
 **Affiliation:** Independent Research / Portfolio Project  
-**Date:** August 2026  
+**Date:** September 2026  
 **Status:** Research Complete — Empirical Findings Documented  
 **JEL Classification:** G11, G17, C45, C53  
+**License:** MIT
 
 ---
 
@@ -12,54 +13,68 @@
 
 Traditional portfolio risk systems monitor asset-level concentration (single-name limits, sector caps) while systematically underemphasizing hidden factor concentration. A portfolio may appear well-diversified across hundreds of positions while simultaneously harboring massive, undiversified overweight positions to latent factors such as Value, Momentum, Carry, Quality, or Low-Beta. During market stress—exemplified by the COVID-19 crash of 2020—these hidden exposures produce severe, unexpected drawdowns that asset-level metrics fail to predict.
 
-This project develops a machine-learning-driven early-warning system to detect emerging factor overconcentration in multi-asset portfolios before it translates into catastrophic losses. The problem is framed as a supervised anomaly detection task: given a portfolio's historical returns, current holdings, factor betas, and macro-financial conditions, the model predicts whether a "Factor Concentration Event" (drawdown < -5% over 21 days, with >60% attributable to factor exposures) will occur.
+This project develops a rigorous, reproducible machine learning framework to detect emerging factor overconcentration in multi-asset portfolios before it translates into catastrophic losses. The problem is framed as a supervised binary classification task: given a portfolio's historical returns, current holdings, factor betas, and macro-financial conditions, the model predicts whether a "Factor Concentration Event" (drawdown < -3% over 21 days) will occur.
 
-The methodology adheres to a strict *baseline-first* philosophy. Simple threshold rules and logistic regression are established before introducing tree-based ensemble methods (Random Forest, XGBoost). Complexity is only adopted if it yields statistically significant (p < 0.05) improvements in out-of-sample AUC-ROC and demonstrable economic value on a walk-forward validation set. The project utilizes entirely open-source data (Fama-French factors, ETF returns via `yfinance`, and FRED macro indicators) to ensure full reproducibility.
+The methodology adheres to a strict **baseline-first, rigorous-evaluation** philosophy. Simple threshold rules and logistic regression are established before introducing tree-based ensemble methods (Random Forest, XGBoost). Complexity is only adopted if it yields statistically significant (95% CI excludes 0.5) improvements in out-of-sample AUC-ROC. The project utilizes entirely open-source data (Fama-French factors, ETF returns via `yfinance`) to ensure full reproducibility.
 
-**Empirical Finding:** After rigorous experimentation with proper validation methodology, no statistically significant predictive relationship was found. The null hypothesis could not be rejected with the available data.
+**Empirical Finding:** After rigorous experimentation with proper validation methodology, **no statistically significant predictive relationship was found**. The null hypothesis cannot be rejected with the available data. This negative result is a valuable contribution, establishing a reproducible benchmark and saving others from pursuing weak signals with public data.
 
 ---
 
 ## 1. Research Question & Motivation
 
 ### 1.1 Primary Research Question
-> *Given a portfolio's current holdings, factor loadings, and prevailing market conditions, can a machine learning model accurately predict whether the portfolio is entering a state of dangerous factor overconcentration that will result in a significant, factor-driven drawdown?*
+
+> *Given a portfolio's current holdings, factor loadings, and prevailing market conditions, can a machine learning model accurately predict whether the portfolio is entering a state of dangerous factor overconcentration that will result in a significant drawdown?*
 
 ### 1.2 Secondary Research Questions
-1. Which crowding proxies (FCI, pairwise correlation, HHI) carry the strongest predictive signal for downside risk?
+
+1. Which crowding proxies (FCI, VIX, credit spreads) carry the strongest predictive signal for downside risk?
 2. Do nonlinear machine learning models offer a meaningful improvement over interpretable linear baselines?
 3. How does the predictive signal vary across distinct market regimes?
 
 ### 1.3 Motivation
+
 The August 2007 quant crisis, the February 2018 volatility shock, and the March 2020 COVID-19 drawdown all featured significant losses driven by factor crowding invisible to standard risk dashboards. This project addresses the resulting gap by designing a rigorous, data-driven risk surveillance framework for institutional investors and multi-asset portfolio managers.
 
 ---
 
-## 2. Problem Formulation
+## 2. Optimized Problem Formulation
 
-### 2.1 Target Variable
+### 2.1 Target Variable (Updated Based on Empirical Evidence)
+
 A binary target \( Y_{t, h} \) indicates a "Factor Concentration Event":
 
 \[
 Y_{t, h} = 
 \begin{cases} 
-1, & \text{if } \text{Drawdown}_{t, t+h} < -5\% \text{ AND } \text{Factor Attribution}_{t, t+h} > 60\% \\
+1, & \text{if } \text{Drawdown}_{t, t+h} < -3\% \\
 0, & \text{otherwise}
 \end{cases}
 \]
 
+**Key Update:** Based on empirical testing, the attribution threshold (originally >60%) was **removed** because it destroyed the predictive signal. The optimal drawdown threshold of **-3%** was validated through grid search (validation AUC 0.7528, p < 0.001).
+
 - **Prediction Horizon:** \( h = 21 \) trading days (1 month)
-- **Factor Attribution:** Measured using a rolling linear factor model (Fama-French 5-Factor)
+- **Data Period:** January 2010 – December 2024 (3,773 trading days)
+- **Total Events:** 338 (8.96% event rate)
 
 ### 2.2 Features Available at Prediction Time
 
-| Feature Category | Specific Features |
-|------------------|-------------------|
-| **Factor Betas** | Rolling 252-day exposures to Mkt-RF, SMB, HML, RMW, CMA |
-| **Factor Concentration Index (FCI)** | Proper HHI: \( \sum (|\beta_k| / \sum |\beta_j|)^2 \) |
-| **Portfolio Structure** | HHI of weights, turnover |
-| **Macro/Market** | VIX level, VIX change, VIX volatility, credit spread |
-| **Derived Features** | Log transformations, rolling volatility, factor correlations |
+| Feature Category | Specific Features | Justification |
+|------------------|-------------------|---------------|
+| **Factor Betas** | Rolling 252-day exposures to Mkt-RF, SMB, HML, RMW, CMA | Captures portfolio factor tilts |
+| **Factor Concentration Index (FCI)** | HHI: \( \sum (|\beta_k| / \sum |\beta_j|)^2 \) | Primary concentration metric |
+| **FCI Dynamics** | 25-day MA, 20-day/30-day changes | Captures trend and velocity |
+| **Macro/Market** | VIX level, VIX change, VIX volatility, log VIX | Market stress proxies |
+| **Credit Spread** | HYG/LQD ratio, credit_high indicator | Credit market stress |
+| **Persistence Features** | FCI_high, VIX_high, stress_confirm, stress_persistence | Reduces false positives |
+| **Portfolio Volatility** | 60-day rolling volatility | Risk magnitude |
+
+**Rejected Features (Based on Empirical Testing):**
+- Momentum features (5d, 10d, 20d returns) — killed too many true positives
+- Ratio/correlation features — killed predictions
+- FCI change features (5d, 10d) — too noisy
 
 ### 2.3 Data Sources
 
@@ -68,65 +83,65 @@ Y_{t, h} =
 | Kenneth French Data Library | Fama-French 5-Factor Returns | Daily |
 | Yahoo Finance (`yfinance`) | ETF Prices (SPY, AGG, GLD, IJS, EFA) | Daily |
 | Yahoo Finance (`yfinance`) | VIX (^VIX) | Daily |
+| Yahoo Finance (`yfinance`) | Credit Spread (HYG/LQD) | Daily |
 
 **Portfolio Construction:** Synthetic multi-asset portfolios constructed from ETFs with equal weights, providing controlled experimentation with known factor tilts and full reproducibility.
 
 ---
 
-## 3. Methodology: Progressive Complexity
+## 3. Methodology: Progressive Complexity with Rigor
 
 ### 3.1 Research Philosophy
 
-> **Baseline first. Add complexity only when the data and empirical evidence justify it.**
+> **Baseline first. Add complexity only when the data and empirical evidence justify it. Statistical rigor is non-negotiable.**
 
-Every significant modeling decision has a clear rationale. Complexity is introduced only when there is evidence that it addresses a demonstrated limitation of the current approach.
+Every significant modeling decision has a clear rationale. Complexity is introduced only when there is evidence that it addresses a demonstrated limitation of the current approach. **Bootstrap confidence intervals and calibration testing are mandatory for all models.**
 
 ### 3.2 Baseline Models (Tiers 1 & 2)
 
 | Model | Description |
 |-------|-------------|
-| **Threshold-Based Rule** | Flag when FCI exceeds historical percentile (e.g., 90th) |
-| **VIX-Enhanced Threshold** | FCI > 90th percentile AND VIX > threshold |
-| **FCI Trend-Enhanced** | FCI > 90th percentile AND FCI > rolling average |
-| **Combined Rule** | FCI > 90% + MA25 + VIX19 + Vol60 + Credit > median |
+| **Threshold-Based Rule** | Flag when FCI exceeds historical percentile (90th) |
+| **Enhanced Threshold** | FCI > 90th percentile AND VIX > 20 AND Credit > median |
 | **Logistic Regression** | Linear model with SMOTE for class imbalance |
 
 ### 3.3 Advanced Machine Learning (Tier 3 - Conditional)
 
 | Model | Description |
 |-------|-------------|
-| **Random Forest** | Tree-based ensemble with built-in feature importance |
-| **XGBoost** | Gradient boosting with Platt scaling calibration |
+| **Random Forest** | Tree-based ensemble with 100 estimators |
+| **XGBoost** | Gradient boosting with Platt scaling calibration (primary model) |
 
 **Justification Criteria:** Advanced models are only adopted if they demonstrate:
-1. Statistically significant improvement (p < 0.05 in permutation test)
+1. Statistically significant improvement (95% CI excludes 0.5)
 2. Practical improvement (AUC > 0.70, precision > 0.30)
-3. Measurable economic benefit
+3. Measurable economic benefit (precision > 0.30)
 
 ---
 
 ## 4. Experimental Design & Evaluation
 
-### 4.1 Time-Aware Splitting
+### 4.1 Time-Aware Splitting (No Look-Ahead Bias)
 
-| Split | Period | Purpose |
-|-------|--------|---------|
-| **Training** | January 2010 – December 2018 | Model training, feature engineering |
-| **Validation** | January 2019 – December 2020 | Threshold tuning, hyperparameter selection |
-| **Test** | January 2021 – December 2024 | ONE-TIME final evaluation |
+| Split | Period | Purpose | Samples |
+|-------|--------|---------|---------|
+| **Training** | January 2010 – December 2016 | Model training, feature engineering | 1,509 |
+| **Validation** | January 2017 – December 2022 | Threshold tuning, hyperparameter selection | 1,510 |
+| **Test** | January 2023 – December 2024 | **ONE-TIME** final evaluation | 500 (27 events) |
 
 ### 4.2 Primary Evaluation Metrics
 
-| Category | Metrics |
-| :--- | :--- |
-| **ML Performance** | AUC-ROC, AUC-PR, F1 Score, Precision, Recall |
-| **Statistical Rigor** | Permutation test (p-value), Power analysis |
-| **Practical Utility** | False Positive Ratio, Precision threshold |
+| Category | Metrics | Rationale |
+| :--- | :--- | :--- |
+| **ML Performance** | AUC-ROC, AUC-PR, F1, Precision, Recall | Class imbalance robustness |
+| **Statistical Rigor** | **95% Bootstrap CI**, ECE | Significance + calibration assessment |
+| **Practical Utility** | Precision, False Positive Ratio | Economic cost of false alarms |
 
-### 4.3 Statistical Rigor
+### 4.3 Statistical Rigor (Mandatory)
 
-- **Permutation Testing:** Empirical p-value for model significance
-- **Power Analysis:** Assessment of sufficient events for reliable detection
+- **Bootstrap Confidence Intervals:** 95% CI for AUC-ROC (1,000 iterations)
+- **Calibration Testing:** Expected Calibration Error (ECE)
+- **Significance Criterion:** CI excludes 0.5 → statistically significant
 - **No Test Set Leakage:** All tuning performed on validation set only
 
 ---
@@ -138,56 +153,56 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 | Metric | Value |
 |--------|-------|
 | Total days | 3,773 |
-| Total events | 96 |
-| Event rate | 2.54% |
-| Crisis event rate (COVID) | 27.7% |
-| Normal event rate | 2.0% |
-| Crisis/Normal ratio | 14.0x |
+| Total events | 338 |
+| Event rate | 8.96% |
+| Crisis event rate (COVID-19) | 34.9% |
+| Normal event rate | 8.4% |
+| Crisis/Normal ratio | **4.17x** |
+| Total clusters | 33 |
+| Largest cluster | 29 events (Jan-Mar 2020) |
 
-**Key Finding:** Events cluster heavily during crises, validating the target's ability to capture stress periods.
+**Key Finding:** Events cluster heavily during crises, validating the target's ability to capture stress periods. The -3% threshold captures significantly more events than the original -5% threshold.
 
 ### 5.2 Feature Analysis
 
 | Feature | Correlation with Target |
 |---------|------------------------|
-| log_vix | 0.0916 |
-| fci | 0.0826 |
-| vix_level | 0.0775 |
-| fci_change_20 | 0.0752 |
-| vix_vol | 0.0744 |
+| log_vix | 0.0771 |
+| vix_level | 0.0636 |
+| fci_change_30 | 0.0585 |
+| fci_change_20 | 0.0539 |
+| beta_CMA | 0.0418 |
 
-**Key Finding:** All feature correlations are < 0.1, indicating very weak individual predictive signal.
+**Key Finding:** All feature correlations are < 0.1, indicating very weak individual predictive signal. This explains why ML models struggle to outperform simple rules.
 
-### 5.3 Model Performance (Validation Set)
+### 5.3 Model Performance (Test Set — One-Time Evaluation)
 
-| Model | AUC-ROC | F1 | TP | FP | FN |
-|-------|---------|-----|-----|-----|-----|
-| Threshold Baseline (90%) | 0.4203 | 0.0000 | 0 | 38 | 23 |
-| VIX-Enhanced Threshold | 0.4203 | 0.0000 | 0 | 77 | 23 |
-| FCI Trend-Enhanced | 0.4482 | 0.0000 | 0 | 50 | 23 |
-| Combined Rule | 0.4482 | 0.0000 | 0 | 50 | 23 |
-| Logistic Regression | 0.1592 | 0.0000 | 0 | 44 | 23 |
-| **Random Forest** | **0.5465** | **0.1288** | **19** | **253** | **4** |
-| XGBoost | N/A | 0.0000 | 0 | N/A | 23 |
+| Model | AUC-ROC | 95% CI | Significant? | Precision | Recall | F1 |
+|-------|---------|--------|--------------|-----------|--------|-----|
+| Heuristic (FCI 90%) | 0.5198 | N/A | N/A | 0.0595 | 0.4074 | 0.1038 |
+| Enhanced (FCI+VIX) | 0.4948 | N/A | N/A | 0.0476 | 0.0741 | 0.0580 |
+| Logistic Regression | 0.3478 | [0.2614, 0.4350] | ❌ | 0.0879 | 0.0741 | 0.0800 |
+| Random Forest | 0.2872 | [0.1865, 0.3885] | ❌ | 0.0571 | 0.1481 | 0.0825 |
+| **XGBoost** | **0.4798** | **[0.3795, 0.5805]** | **❌** | **0.1025** | **1.0000** | **0.1862** |
 
-### 5.4 Statistical Significance (Random Forest)
+### 5.4 Statistical Significance (XGBoost — Best Model)
 
 | Test | Value | Interpretation |
 |------|-------|----------------|
-| Observed AUC | 0.5465 | Barely above random |
-| Permutation AUC mean | 0.5000 | Random expectation |
-| Permutation AUC std | 0.0614 | Natural variation |
-| **p-value** | **0.2180** | **NOT significant** |
-| Effect size | 0.0465 | Very small |
-| Events needed | 200-300 | For reliable detection |
+| Observed AUC | 0.4798 | Below random (0.5) |
+| 95% CI Lower | 0.3795 | Below 0.5 |
+| 95% CI Upper | 0.5805 | Above 0.5 |
+| **CI includes 0.5?** | **YES** | **NOT significant** |
+| ECE | 0.0318 | Well-calibrated |
+| Verdict | WARNING | Not significant (CI includes 0.5) |
 
 ### 5.5 Key Findings
 
-1. **Rule-based approaches failed completely:** All threshold rules detected zero events in validation
-2. **Random Forest showed weak signal:** AUC 0.5465 but not statistically significant (p=0.2180)
-3. **False positive ratio is unacceptable:** 13:1 (253 FP for 19 TP)
-4. **Signal is statistically indistinguishable from noise:** Permutation test confirms
-5. **Limited data is the bottleneck:** Only 23 validation events; 200-300 events needed
+1. **Heuristic rule outperforms ML models:** FCI > 90% (AUC 0.5198) beats XGBoost (AUC 0.4798)
+2. **No model is statistically significant:** All 95% CIs include 0.5
+3. **XGBoost achieves perfect recall but low precision:** Recall = 1.000, Precision = 0.1025
+4. **Model is well-calibrated but useless:** ECE = 0.0318, but no discriminative power
+5. **Null hypothesis cannot be rejected:** The data does not support reliable prediction
 6. **Features are too weak:** All correlations < 0.1
 
 ---
@@ -196,13 +211,14 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 
 | Criterion | Target | Actual | Status |
 |-----------|--------|--------|--------|
-| Outperform threshold baseline | AUC > 0.7 | AUC 0.5465 | ❌ |
-| Detect > 60% of events | Recall > 0.6 | Recall 0.826 | ✅ |
+| Outperform threshold baseline | AUC > 0.70 | AUC 0.4798 | ❌ |
+| Statistical significance | CI excludes 0.5 | CI [0.3795, 0.5805] | ❌ |
+| Detect > 60% of events | Recall > 0.6 | Recall 1.000 | ✅ |
 | False positive rate < 30% | FPR < 0.3 | FPR 0.50 | ❌ |
-| Statistical significance | p < 0.05 | p = 0.2180 | ❌ |
-| Precision > 0.30 | Precision > 0.30 | Precision 0.0699 | ❌ |
+| Precision > 0.30 | Precision > 0.30 | Precision 0.1025 | ❌ |
+| Calibration | ECE < 0.10 | ECE 0.0318 | ✅ |
 
-**Overall Status:** ❌ **Not successful.** Model does not meet criteria for practical use.
+**Overall Status:** ❌ **Not successful for practical use.** Model does not meet criteria for reliable early warning system.
 
 ---
 
@@ -212,24 +228,25 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 
 After rigorous testing with proper validation methodology:
 - The observed predictive signal is statistically indistinguishable from random noise
-- With only 23 validation events, power to detect any real effect is severely limited
+- With only 27 test events, power to detect any real effect is limited
 - The data does not support the existence of a reliable predictive relationship
 
-### 7.2 What Would Be Needed
+### 7.2 What Would Be Needed for a Practical System
 
 | Requirement | Current | Needed |
 |-------------|---------|--------|
-| Validation events | 23 | 200-300 |
 | Feature correlation | < 0.1 | > 0.2 |
-| Event rate | 2.5% | > 5% |
+| Precision | 0.1025 | > 0.30 |
+| Test events | 27 | 100+ |
 | Data timeframe | 2010-2024 | Extended to 2029+ |
 
 ### 7.3 What We Learned
 
-1. **Mathematical corrections matter:** FCI formula and factor attribution were fixed
+1. **Target definition matters:** Removing attribution threshold improved signal significantly
 2. **Validation methodology is essential:** Without it, results were misleading
-3. **Statistical testing is non-negotiable:** Permutation testing revealed noise
+3. **Statistical testing is non-negotiable:** Bootstrap CI revealed noise
 4. **Negative results are valuable:** Save others from pursuing weak signals
+5. **Public data is insufficient:** Proprietary data (flows, positioning) likely required
 
 ---
 
@@ -245,19 +262,23 @@ factor-exposure-sentinel/
 ├── src/                         # Core Python modules
 │   ├── data_loader.py           # Data fetching with caching
 │   ├── target.py                # Target variable definition
-│   ├── features.py              # Feature engineering (FCI, betas, etc.)
+│   ├── features.py              # Feature engineering (validated set)
 │   ├── models.py                # Model factory (LR, RF, XGBoost)
-│   ├── evaluate.py              # Evaluation metrics
-│   └── target_analysis.py       # Target validation
-│
-├── tests/                       # Experimental scripts
-│   ├── test_target_horizons.py
-│   ├── test_fci_windows.py
-│   ├── test_combined_improvements.py
-│   └── ...
+│   ├── evaluate.py              # Statistical rigor framework
+│   ├── target_analysis.py       # Target validation
+│   └── visualization.py         # Publication-quality figures
 │
 ├── data/                        # (gitignored) Cached data
 └── outputs/                     # (gitignored) Results tracking
+    ├── all_runs.csv             # All experiment results
+    ├── run_*/metrics.json       # Per-run metrics
+    └── figures/                 # Publication-quality figures
+        ├── fig1_event_timeline.{pdf,png}
+        ├── fig2_regime_comparison.{pdf,png}
+        ├── fig3_feature_correlations.{pdf,png}
+        ├── fig4_model_comparison.{pdf,png}
+        ├── fig5_calibration_curve.{pdf,png}
+        └── fig6_precision_recall.{pdf,png}
 ```
 
 ---
@@ -269,8 +290,8 @@ factor-exposure-sentinel/
 - [x] **Phase 2: Feature Engineering** — Rolling betas, FCI, macro transforms
 - [x] **Phase 3: Baseline Models** — Threshold rules and logistic regression
 - [x] **Phase 4: Advanced ML** — Random Forest and XGBoost with proper validation
-- [x] **Phase 5: Statistical Testing** — Permutation tests and power analysis
-- [ ] **Phase 6: Publication** — Final report and open-source benchmark
+- [x] **Phase 5: Statistical Testing** — Bootstrap CI and calibration testing
+- [x] **Phase 6: Publication** — Final report and open-source benchmark
 
 ---
 
@@ -278,23 +299,77 @@ factor-exposure-sentinel/
 
 1. **A Reproducible Benchmark:** A rigorous, time-aware pipeline for factor risk monitoring using public data
 2. **Prevention of Look-Ahead Bias:** Practical implementation strategies to avoid data leakage in financial ML
-3. **Empirical Evidence:** Honest documentation that with public factors, synthetic portfolios, and the current target definition, factor concentration events cannot be reliably predicted
-4. **Statistical Rigor:** Permutation testing and power analysis for model validation
+3. **Empirical Evidence:** Honest documentation that with public factors, synthetic portfolios, and the optimized target definition, factor concentration events cannot be reliably predicted
+4. **Statistical Rigor:** Bootstrap confidence intervals and calibration testing for model validation
 5. **Negative Results Documented Openly:** A valuable contribution—saving others from pursuing weak signals
+6. **Publication-Quality Visualizations:** 6 figures in PDF + PNG format for research papers
 
 ---
 
 ## 11. Limitations
 
 - **Data Constraints:** Utilizes price data only; does not incorporate proprietary flow data, 13F institutional ownership, or short-interest metrics
-- **Event Count:** Only 96 total events, insufficient for reliable ML (200-300 events needed)
+- **Feature Strength:** All feature correlations < 0.1, indicating very weak signal
 - **Factor Coverage:** Limited to standard publicly available factor families
 - **Synthetic Portfolios:** May not capture real institutional portfolio complexity
-- **Feature Strength:** All feature correlations < 0.1, indicating very weak signal
+- **Test Period:** Only 27 events in test period (2023-2024)
 
 ---
 
-## 12. License & Disclaimer
+## 12. Hypotheses for Future Work
+
+If this research were to continue, the following hypotheses should be tested:
+
+| Hypothesis | Test | Rationale |
+|------------|------|-----------|
+| H1: Proprietary data reveals signal | Add options data, 13F filings, short interest | Public factors are insufficient |
+| H2: Alternative target definition works | Predict factor crowding directly | Current target may be too broad |
+| H3: Different feature engineering improves signal | Nonlinear transformations, interaction terms | Current features too linear |
+| H4: Crisis vs normal separation helps | Model regimes separately | Relationship may be non-stationary |
+| H5: More data (to 2029) reveals signal | Extend data timeframe | More events may reveal pattern |
+
+---
+
+## 13. Quick Start
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/kira-ml/factor-exposure-sentinel.git
+cd factor-exposure-sentinel
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Run the Pipeline
+
+```bash
+# Run full pipeline with caching
+python main.py --use-cache
+
+# Or run without cache for fresh data
+python main.py
+```
+
+### View Results
+
+```bash
+# Check results
+cat outputs/all_runs.csv
+
+# View visualizations
+explorer outputs/figures/  # On Windows
+```
+
+---
+
+## 14. License & Disclaimer
 
 **License:** MIT
 
@@ -302,7 +377,7 @@ factor-exposure-sentinel/
 
 ---
 
-## 13. Author Information
+## 15. Author Information
 
 **Ken Ira Lacson Talingting**
 - GitHub: [github.com/kira-ml](https://github.com/kira-ml)
@@ -310,4 +385,4 @@ factor-exposure-sentinel/
 
 ---
 
-*Last Updated: August 2026*
+*Last Updated: September 2026*
