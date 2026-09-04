@@ -24,7 +24,9 @@ from reportlab.lib import colors
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-OUTPUT_DIR = Path(__file__).parent / "outputs"
+# Project root is one level above src/
+PROJECT_ROOT = Path(__file__).parent.parent
+OUTPUT_DIR = PROJECT_ROOT / "outputs"
 FIGURES_DIR = OUTPUT_DIR / "figures"
 PAPER_DIR = OUTPUT_DIR / "paper"
 PAPER_DIR.mkdir(parents=True, exist_ok=True)
@@ -412,6 +414,15 @@ def build_paper():
         body_style
     ))
 
+    # Figure 3: Feature Correlations (visual confirmation of weak signal)
+    add_figure(story, "fig3_feature_correlations.png",
+               "Figure 3: Feature correlations with the target variable. All features "
+               "exhibit correlations below |0.1|, confirming the weak individual "
+               "predictive signal. The strongest predictor is log(VIX) at 0.077.",
+               width=5.0 * inch)
+
+
+    
     story.append(Paragraph("4. Methodology & Evaluation Framework", heading1_style))
     story.append(Paragraph(
         "The methodology follows a baseline-first approach. Statistical rigor is "
