@@ -87,18 +87,43 @@
 
 ---
 
-#### 💡 Critical Discoveries (Day 3)
+### September 5, 2026 (Day 10 — VISUALIZATION & PAPER FINALIZATION)
 
-1. **Attribution threshold destroys signal**: 60% threshold gave AUC 0.5465 (p=0.2180); removing it gave AUC 0.7147 (p=0.0000)
-2. **-3% is optimal drawdown threshold**: AUC 0.7528 vs 0.7147 for -5%, F1 0.3221 vs 0.1778
-3. **-7% threshold fails completely**: AUC 0.4328, p=0.8520 (no signal)
-4. **Continuous target has signal**: MAE 0.0286 beats naive 0.0319 (11% improvement)
-5. **Validation split matters**: Fixed to 2010-2016 / 2017-2022 / 2023-2024
-6. **Persistence features overfit**: LR validation AUC 0.6552 but test AUC 0.2402
-7. **XGBoost is more stable**: Stability penalty prevented LR disaster
-8. **Statistical rigor proves null hypothesis**: 95% CI [0.4490, 0.6201] includes 0.5
-9. **Final verdict**: WARNING - Not significant (CI includes 0.5)
-10. **Model is well-calibrated but useless**: ECE 0.0310, but no discriminative power
+#### ✅ What I Did Today
+
+| Time | Task | Status | Notes |
+|------|------|--------|-------|
+| 00:30 | Analyzed visualization.py (initial version) | ✅ | Identified layout and statistical inconsistencies |
+| 00:45 | Fixed Figure 1 Y-axis (0-100% → 0-40%) | ✅ | No longer misleading scale |
+| 00:50 | Fixed Figure 2 crisis period inconsistency | ✅ | Changed to `2020-04-30` to match main.py (34.9%) |
+| 01:00 | Fixed Figure 4 duplicate XGBoost models | ✅ | Removed SMOTE and duplicate entries |
+| 01:15 | Fixed Figure 5 calibration bins (10 → 5) | ✅ | More robust with only 27 test events |
+| 01:30 | Fixed Figure 6 precision-recall values | ✅ | Matched README (P=0.10, R=1.0, F1=0.19) |
+| 01:45 | Fixed Figure 1 annotation box position | ✅ | Moved to top-left (no longer covers 2022 data) |
+| 02:00 | Fixed Figure 1 title layout | ✅ | `y=1.02` visible without clipping |
+| 02:15 | Fixed Figure 3 & 4 label margins | ✅ | Expanded xlim / figsize |
+| 02:30 | **Optimized visualization.py to 120 lines** | ✅ | Data-driven, minimal, no aesthetic fluff |
+| 02:45 | Fixed `OUTPUT_DIR` path issue | ✅ | Changed to `Path(__file__).parent.parent / "outputs"` |
+| 03:00 | Fixed `save_fig` OSError | ✅ | Removed `bbox_inches='tight'` globally & locally |
+| 03:15 | **Validated all 6 figures statistically** | ✅ | Confirmed consistency, no overclaiming, honest negative result |
+| 03:30 | **Explained statistical meaning of each figure** | ✅ | Documented for paper writing |
+| 04:00 | **Generated comprehensive research paper PDF** | ✅ | Using ReportLab (5-10 pages, academic style) |
+| 04:30 | Updated README with synthetic portfolio transparency | ✅ | Credibility protection |
+
+---
+
+#### 💡 Critical Discoveries (Day 10)
+
+1. **`bbox_inches='tight'` causes OSError** on Windows systems. Removed entirely.
+2. **Crisis period inconsistency** (46.8% vs 34.9%) was a fatal statistical flaw. Fixed to `2020-04-30`.
+3. **Duplicate XGBoost models** confused the paper. Renamed and filtered.
+4. **Figure 1 Y-axis was misleading** (0-100% instead of 0-40%).
+5. **Figure 1 annotation box covered 2022 data**. Moved to top-left.
+6. **Calibration `n_bins=10` was unstable** with 27 events. Changed to `n_bins=5`.
+7. **Figure 6 values didn't match README**. Aligned to P=0.10, R=1.0, F1=0.19.
+8. **Paper generation requires `reportlab`**. Installed via pip.
+9. **Figures are statistically valid** and honestly communicate the negative result.
+10. **Synthetic portfolio must be disclosed** to protect credibility.
 
 ---
 
@@ -106,12 +131,12 @@
 
 | Metric | Value | Interpretation |
 |--------|-------|----------------|
-| **AUC-ROC** | 0.5049 | Barely above random |
-| **95% CI** | [0.4490, 0.6201] | **Includes 0.5 → NOT significant** |
-| **Precision** | 0.0540 | Only 5.4% of alerts correct |
+| **AUC-ROC** | 0.4798 | Below random (0.5) |
+| **95% CI** | [0.3795, 0.5805] | **Includes 0.5 → NOT significant** |
+| **Precision** | 0.1025 | Only 10% of alerts correct |
 | **Recall** | 1.0000 | Caught all events (but flagged everything) |
-| **F1 Score** | 0.1025 | Poor balance |
-| **ECE** | 0.0310 | Well-calibrated but useless |
+| **F1 Score** | 0.1862 | Poor balance |
+| **ECE** | 0.0318 | Well-calibrated but useless |
 | **Verdict** | **WARNING** | Not significant (CI includes 0.5) |
 
 **Key Insight**: The model is statistically indistinguishable from random noise. The null hypothesis cannot be rejected.
@@ -128,10 +153,11 @@
 | Target Analysis | ✅ Complete | 338 events (8.96%), crisis ratio 4.17x |
 | Statistical Testing | ✅ Complete | Bootstrap CI, calibration (ECE), significance testing |
 | Model Testing | ✅ Complete | LR, RF, XGBoost tested |
-| **Best Test AUC** | ⚠️ **0.5049** | CI includes 0.5 → NOT significant |
-| **Best Test F1** | ⚠️ **0.1025** | Poor precision/recall balance |
-| **Calibration** | ✅ **ECE 0.0310** | Well-calibrated but no discriminative power |
-| **Visualizations** | ✅ **Complete** | 6 modern, publication-quality figures |
+| **Best Test AUC** | ⚠️ **0.4798** | CI includes 0.5 → NOT significant |
+| **Best Test F1** | ⚠️ **0.1862** | Poor precision/recall balance |
+| **Calibration** | ✅ **ECE 0.0318** | Well-calibrated but no discriminative power |
+| **Visualizations** | ✅ **Complete** | 6 data-driven, minimal figures (PNG only) |
+| **Paper Generation** | ✅ **Complete** | 5-10 page PDF via ReportLab |
 | **Overall Verdict** | ⚠️ **WARNING** | **Model is not statistically significant** |
 
 ---
@@ -236,7 +262,7 @@
 | **fig2_regime_event_rates.png** | 4.17x more events in crises | ✅ Saved |
 | **fig3_feature_correlations.png** | All correlations < 0.1 | ✅ Saved |
 | **fig4_model_comparison.png** | All models CI includes 0.5 | ✅ Saved |
-| **fig5_calibration_curve.png** | ECE 0.0310 (calibrated but useless) | ✅ Saved |
+| **fig5_calibration_curve.png** | ECE 0.0318 (calibrated but useless) | ✅ Saved |
 | **fig6_precision_recall.png** | High recall = low precision | ✅ Saved |
 
 **Location:** `D:/quant-finance-ml/factor-exposure-sentinel/outputs/figures/`
@@ -273,12 +299,13 @@ git push origin main
 
 **The null hypothesis cannot be rejected.**
 
-After 3 days of rigorous experimentation:
+After 10 days of rigorous experimentation:
 - ✅ Complete data pipeline with 15 years of data
 - ✅ 27 features engineered with no look-ahead bias
 - ✅ 3 model classes tested (LR, RF, XGBoost)
 - ✅ Statistical validation with bootstrap CI and calibration
-- ✅ 6 modern visualizations proving the result
+- ✅ 6 data-driven visualizations proving the result
+- ✅ 5-10 page research paper generated (PDF)
 
 **Final Verdict:** Model is statistically indistinguishable from random noise (95% CI includes 0.5). Public data and synthetic portfolios cannot predict factor concentration events.
 
@@ -286,4 +313,4 @@ After 3 days of rigorous experimentation:
 
 ---
 
-*Last Updated: August 28, 2026 (11:00 PM)*
+*Last Updated: September 5, 2026 (11:00 PM)*
