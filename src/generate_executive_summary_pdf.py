@@ -9,6 +9,7 @@ Design principles:
 - Executive-summary tone: Concise, structured, evidence-based
 - No overclaiming: Objective, data-driven, appropriately cautious
 - One page maximum, balanced font sizes for readability
+- Professional Times New Roman font
 """
 
 import os
@@ -24,6 +25,24 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 )
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+# ============================================================================
+# REGISTER TIMES NEW ROMAN FONTS
+# ============================================================================
+
+# Try to register Times New Roman (Windows)
+try:
+    pdfmetrics.registerFont(TTFont('TimesNewRoman', 'Times New Roman.ttf'))
+    pdfmetrics.registerFont(TTFont('TimesNewRoman-Bold', 'Times New Roman Bold.ttf'))
+    pdfmetrics.registerFont(TTFont('TimesNewRoman-Italic', 'Times New Roman Italic.ttf'))
+    pdfmetrics.registerFont(TTFont('TimesNewRoman-BoldItalic', 'Times New Roman Bold Italic.ttf'))
+    FONT_AVAILABLE = True
+except:
+    # Fallback to built-in fonts
+    FONT_AVAILABLE = False
+    print("Note: Times New Roman not found. Using fallback fonts.")
 
 # ============================================================================
 # CONFIGURATION
@@ -68,17 +87,29 @@ def get_target_stats():
     }
 
 # ============================================================================
-# STYLES - BALANCED FOR ONE PAGE
+# STYLES - TIMES NEW ROMAN
 # ============================================================================
 
 def get_styles():
-    """Create paragraph styles for the executive summary."""
+    """Create paragraph styles for the executive summary with Times New Roman."""
     styles = getSampleStyleSheet()
+    
+    # Font names
+    if FONT_AVAILABLE:
+        regular = 'TimesNewRoman'
+        bold = 'TimesNewRoman-Bold'
+        italic = 'TimesNewRoman-Italic'
+        bold_italic = 'TimesNewRoman-BoldItalic'
+    else:
+        regular = 'Times-Roman'
+        bold = 'Times-Bold'
+        italic = 'Times-Italic'
+        bold_italic = 'Times-BoldItalic'
     
     # Title
     title_style = ParagraphStyle(
         'TitleStyle', parent=styles['Title'],
-        fontName='Helvetica-Bold',
+        fontName=bold,
         fontSize=16,
         leading=19,
         alignment=TA_CENTER,
@@ -88,7 +119,7 @@ def get_styles():
     # Subtitle / Author
     subtitle_style = ParagraphStyle(
         'SubtitleStyle', parent=styles['Normal'],
-        fontName='Helvetica',
+        fontName=regular,
         fontSize=10,
         leading=12,
         alignment=TA_CENTER,
@@ -98,7 +129,7 @@ def get_styles():
     # Section headers
     section_style = ParagraphStyle(
         'SectionStyle', parent=styles['Heading2'],
-        fontName='Helvetica-Bold',
+        fontName=bold,
         fontSize=11,
         leading=13,
         spaceBefore=5,
@@ -109,7 +140,7 @@ def get_styles():
     # Body text
     body_style = ParagraphStyle(
         'BodyStyle', parent=styles['Normal'],
-        fontName='Helvetica',
+        fontName=regular,
         fontSize=9,
         leading=11,
         alignment=TA_JUSTIFY,
@@ -119,7 +150,7 @@ def get_styles():
     # Caption
     caption_style = ParagraphStyle(
         'CaptionStyle', parent=styles['Normal'],
-        fontName='Helvetica-Oblique',
+        fontName=italic,
         fontSize=8,
         leading=10,
         alignment=TA_CENTER,
@@ -129,7 +160,7 @@ def get_styles():
     # Footer
     footer_style = ParagraphStyle(
         'FooterStyle', parent=styles['Normal'],
-        fontName='Helvetica',
+        fontName=regular,
         fontSize=7,
         leading=9,
         alignment=TA_CENTER,
@@ -143,6 +174,9 @@ def get_styles():
         'body': body_style,
         'caption': caption_style,
         'footer': footer_style,
+        'bold': bold,
+        'regular': regular,
+        'italic': italic,
     }
 
 # ============================================================================
