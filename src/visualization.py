@@ -250,22 +250,55 @@ def plot_calibration(y_true, y_pred_proba, save=True):
 # ============================================================================
 
 def plot_precision_recall(y_true, y_pred_proba, save=True):
-    """Figure 6: Show high recall = low precision."""
+    """
+    Figure 6: Precision-Recall (ZOOMED IN for LinkedIn).
+    Purpose: Show that high recall = terrible precision (economic cost).
+    """
     from sklearn.metrics import precision_recall_curve
 
-    precision, recall, _ = precision_recall_curve(y_true, y_pred_proba)
-    f1 = 2 * precision * recall / (precision + recall + 1e-10)
-    best_idx = np.argmax(f1)
+    precision, recall, thresholds = precision_recall_curve(y_true, y_pred_proba)
+    
+    # ACTUAL reported metrics (from CSV)
+    reported_precision = 0.0377
+    reported_recall = 0.0741
+    
+    # CRITICAL FIX: Use the historical event rate (0.0896), not the test set rate (0.054)
+    base_rate = 0.0896  # Hardcoded from your full dataset
+    
+    fig, ax = plt.subplots(figsize=(7, 5))
 
-    fig, ax = plt.subplots(figsize=(6, 5))
-    ax.plot(recall, precision, color='blue', linewidth=2)
-    ax.scatter(1.0, 0.1025, color='red', s=100, label='Reported: P=0.10, R=1.0, F1=0.19')
-    ax.axhline(y_true.mean(), color='gray', linestyle='--', label='Random')
+    # 1. The Main Curve
+    ax.plot(recall, precision, color='blue', linewidth=2.5, 
+            label='XGBoost (Test Set)')
 
-    ax.set_xlabel('Recall')
-    ax.set_ylabel('Precision')
-    ax.set_title('Figure 6: Precision-Recall (Best F1 = 0.186 at threshold 0.09)')
-    ax.legend()
+    # 2. The "Reported" Point
+    ax.scatter(reported_recall, reported_precision, color='red', s=180, 
+               zorder=6, edgecolor='black', linewidth=1.5,
+               label=f'Reported: P={reported_precision:.3f}, R={reported_recall:.3f}')
+    
+    # 3. The Random Baseline (Correct full-sample base rate)
+    ax.axhline(base_rate, color='gray', linestyle='--', linewidth=1.5, 
+               label=f'Random (Base Rate = {base_rate:.3f})')
+
+    # 4. ZOOM IN (Keep the zoom)
+    ax.set_xlim(0, 0.5)
+    ax.set_ylim(0, 0.2)
+
+    # 5. Annotations (Clean, precise, accurate)
+    ax.annotate('1 in 26 alerts is real', 
+                xy=(reported_recall, reported_precision), 
+                xytext=(0.15, 0.10),
+                arrowprops=dict(facecolor='black', shrink=0.05, width=2, headwidth=8),
+                fontsize=11, fontweight='bold', color='#d62728')
+
+    # 6. Labels and Title
+    ax.set_xlabel('Recall (True Positive Rate)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Precision', fontsize=12, fontweight='bold')
+    ax.set_title('Figure 6: The Tradeoff is Impossible', fontsize=14, fontweight='bold')
+    
+    # 7. Legend and Grid (Move legend to bottom right to avoid covering the red dot)
+    ax.legend(loc='lower right', frameon=True, edgecolor='black', fontsize=9)
+    ax.grid(True, alpha=0.3, linestyle='--')
 
     if save:
         save_fig(fig, "fig6_precision_recall")

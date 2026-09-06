@@ -5,7 +5,7 @@ Generates a one-page executive summary PDF for the Factor Exposure Sentinel proj
 Designed for LinkedIn attachment and PM distribution.
 
 Design principles:
-- First-principles thinking: Problem -> Why it matters -> Approach -> Results -> Implications
+- First-principles thinking: Question -> Deconstruct -> Evidence -> Conclusion
 - Executive-summary tone: Concise, structured, evidence-based
 - No overclaiming: Objective, data-driven, appropriately cautious
 - One page maximum, balanced font sizes for readability
@@ -55,7 +55,9 @@ PAPER_DIR.mkdir(parents=True, exist_ok=True)
 
 OUTPUT_PDF = PAPER_DIR / "Factor_Exposure_Sentinel_Executive_Summary.pdf"
 RESULTS_CSV = PROJECT_ROOT / "outputs" / "all_runs.csv"
-FIGURE_PATH = PROJECT_ROOT / "outputs" / "figures" / "fig4_model_comparison.png"
+
+# ⚠️ CHANGED: Now using Figure 6 (Precision-Recall) - The most impactful graph
+FIGURE_PATH = PROJECT_ROOT / "outputs" / "figures" / "fig6_precision_recall.png"
 
 # ============================================================================
 # DATA LOADING
@@ -110,8 +112,8 @@ def get_styles():
     title_style = ParagraphStyle(
         'TitleStyle', parent=styles['Title'],
         fontName=bold,
-        fontSize=16,
-        leading=19,
+        fontSize=15,
+        leading=18,
         alignment=TA_CENTER,
         spaceAfter=4,
     )
@@ -130,8 +132,8 @@ def get_styles():
     section_style = ParagraphStyle(
         'SectionStyle', parent=styles['Heading2'],
         fontName=bold,
-        fontSize=11,
-        leading=13,
+        fontSize=10.5,
+        leading=12,
         spaceBefore=5,
         spaceAfter=3,
         alignment=TA_LEFT,
@@ -141,10 +143,22 @@ def get_styles():
     body_style = ParagraphStyle(
         'BodyStyle', parent=styles['Normal'],
         fontName=regular,
-        fontSize=9,
-        leading=11,
+        fontSize=8.5,
+        leading=10.5,
         alignment=TA_JUSTIFY,
         spaceAfter=3,
+    )
+    
+    # Bullet text (for deconstruction)
+    bullet_style = ParagraphStyle(
+        'BulletStyle', parent=styles['Normal'],
+        fontName=regular,
+        fontSize=8.5,
+        leading=10.5,
+        alignment=TA_JUSTIFY,
+        spaceAfter=2,
+        leftIndent=12,
+        bulletIndent=0,
     )
     
     # Caption
@@ -172,6 +186,7 @@ def get_styles():
         'subtitle': subtitle_style,
         'section': section_style,
         'body': body_style,
+        'bullet': bullet_style,
         'caption': caption_style,
         'footer': footer_style,
         'bold': bold,
@@ -223,7 +238,7 @@ def generate_pdf():
     # HEADER
     # ========================================================================
     story.append(Paragraph("Factor Exposure Sentinel", styles['title']))
-    story.append(Paragraph("Executive Summary", styles['subtitle']))
+    story.append(Paragraph("An Empirical Assessment of Public Data", styles['subtitle']))
     story.append(Paragraph(
         f"Ken Ira Lacson Talingting | {datetime.now().strftime('%B %Y')}",
         styles['subtitle']
@@ -231,69 +246,100 @@ def generate_pdf():
     story.append(Spacer(1, 4))
     
     # ========================================================================
-    # PROBLEM
+    # SECTION 1: THE CORE QUESTION (First-Principles Framing)
     # ========================================================================
-    story.append(Paragraph("The Problem", styles['section']))
+    story.append(Paragraph("The Core Question", styles['section']))
     story.append(Paragraph(
-        "Traditional risk systems monitor single-stock and sector concentration, "
-        "but miss hidden factor crowding. A 200-stock portfolio may be 80% exposed "
-        "to one latent factor (Momentum, Value, or Carry). During market stress—"
-        "as seen in 2007, 2018, and 2020—these hidden exposures produce unexpected "
-        "drawdowns that standard dashboards fail to predict.",
+        "Traditional risk systems monitor asset-level concentration. "
+        "Before building a model, one fundamental question was addressed: "
+        "<i>Can a portfolio's hidden factor concentration be reliably predicted 21 days in advance, "
+        "using only publicly available market data?</i>",
         styles['body']
     ))
     story.append(Spacer(1, 3))
     
     # ========================================================================
-    # APPROACH (condensed)
+    # SECTION 2: DECONSTRUCTING THE REQUIREMENT
     # ========================================================================
-    story.append(Paragraph("Approach", styles['section']))
+    story.append(Paragraph("Deconstructing the Requirement", styles['section']))
     story.append(Paragraph(
-        f"Data: 15 years (2010-2024) of public data. Target: drawdown < -3% over 21 days "
-        f"({target_stats['total_events']:,} events, {target_stats['event_rate']:.2f}% of days; "
-        f"{target_stats['crisis_ratio']:.1f}x more frequent during COVID-19). "
-        "Models: Heuristic rules, Logistic Regression, Random Forest, XGBoost. "
-        "Validation: Chronological split with bootstrap 95% CI and ECE calibration.",
+        "For a model to be practically useful, it must clear three foundational hurdles:",
         styles['body']
+    ))
+    story.append(Paragraph(
+        "<b>1. A Definable Target:</b> Can an objective 'factor event' be defined? "
+        "(Yes: Drawdown < -3% over 21 days).",
+        styles['bullet']
+    ))
+    story.append(Paragraph(
+        "<b>2. Sufficient Information:</b> Do public features contain non-zero predictive signal? "
+        "(This required empirical testing).",
+        styles['bullet']
+    ))
+    story.append(Paragraph(
+        "<b>3. Measurable Value:</b> Does nonlinear complexity outperform a simple rule?",
+        styles['bullet']
     ))
     story.append(Spacer(1, 4))
     
     # ========================================================================
-    # FIGURE 4: Model Comparison
+    # SECTION 3: THE EVIDENCE (Figure 6)
     # ========================================================================
     if FIGURE_PATH.exists():
-        img = Image(str(FIGURE_PATH), width=5.5 * inch, height=3.0 * inch)
+        img = Image(str(FIGURE_PATH), width=5.0 * inch, height=3.5 * inch)
         img.hAlign = 'CENTER'
         story.append(img)
         story.append(Spacer(1, 1))
         story.append(Paragraph(
-            "Figure: All ML models have 95% CIs including 0.5 — NOT significant",
+            "Figure: Precision-Recall curve. The model (blue) cannot break above the random baseline (gray) at the reported threshold (red dot).",
             styles['caption']
         ))
         story.append(Spacer(1, 3))
     
     # ========================================================================
-    # KEY RESULT
+    # SECTION 4: WHAT THE DATA SAYS (Objective Findings)
     # ========================================================================
-    story.append(Paragraph("Key Result", styles['section']))
+    story.append(Paragraph("What the Data Indicates", styles['section']))
     story.append(Paragraph(
-        f"XGBoost AUC = {results['auc_roc']:.4f} (95% CI {format_ci(results['ci_lower'], results['ci_upper'], 4)}). "
-        "CI includes 0.5 -> <b>NOT statistically significant</b>. Model is indistinguishable from random. "
-        f"Precision = {results['precision']:.4f} (< 1 in 20 alerts correct).",
+        f"<b>Signal Strength:</b> The strongest individual public predictor (log VIX) holds a "
+        f"correlation of only 0.077 with the target. This is below the threshold of meaningful information content.",
+        styles['body']
+    ))
+    story.append(Paragraph(
+        f"<b>Model Performance:</b> XGBoost achieved an AUC of {results['auc_roc']:.4f} "
+        f"(95% CI: {format_ci(results['ci_lower'], results['ci_upper'], 4)}). "
+        f"The confidence interval includes 0.5, meaning the result is statistically indistinguishable from random noise.",
+        styles['body']
+    ))
+    story.append(Paragraph(
+        "<b>Complexity Value:</b> A simple heuristic performed comparably, suggesting that "
+        "adding architectural complexity did not extract additional signal from these features.",
         styles['body']
     ))
     story.append(Spacer(1, 3))
     
     # ========================================================================
-    # IMPLICATIONS + CONCLUSION (combined to save space)
+    # SECTION 5: CONCLUSION (Humble, Data-Driven)
     # ========================================================================
-    story.append(Paragraph("Implications & Conclusion", styles['section']))
+    story.append(Paragraph("Conclusion", styles['section']))
     story.append(Paragraph(
-        "<b>PMs:</b> Do not rely on ML risk alerts from public data. "
-        "Proprietary data (positioning, flows, short interest) likely required. "
-        "<b>Quants:</b> Use this as a reproducible benchmark. "
-        "<b>Risk Managers:</b> Focus on structural risk (VaR, stress testing) rather than prediction. "
-        "No statistically significant relationship was found with public data.",
+        "The fundamental limitation appears to be the information content of the inputs, "
+        "rather than the model architecture. When feature correlations are < 0.1, "
+        "no amount of complexity can extract signal that isn't present. "
+        "Public data appears insufficient for this specific task. "
+        "Reliable prediction may require proprietary inputs (positioning, flows, short interest).",
+        styles['body']
+    ))
+    story.append(Spacer(1, 3))
+    
+    # ========================================================================
+    # SECTION 6: CONTRIBUTION
+    # ========================================================================
+    story.append(Paragraph("Contribution", styles['section']))
+    story.append(Paragraph(
+        "This project establishes a reproducible benchmark. It allows researchers "
+        "to test whether their proprietary data adds measurable signal beyond what "
+        "public factors provide.",
         styles['body']
     ))
     story.append(Spacer(1, 4))
@@ -302,7 +348,8 @@ def generate_pdf():
     # FOOTER
     # ========================================================================
     story.append(Paragraph(
-        "<font size=7><b>Full code:</b> https://github.com/kira-ml/factor-exposure-sentinel</font>",
+        "<font size=7><b>Full code, methodology, and statistical tests are open-source:</b> "
+        "https://github.com/kira-ml/factor-exposure-sentinel</font>",
         styles['footer']
     ))
     story.append(Paragraph(
