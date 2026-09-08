@@ -183,27 +183,27 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 |-------|-----------|---------|--------|--------------|-----------|--------|-----|
 | Heuristic (FCI 90%) | 90th pct | 0.5115 | N/A | N/A | 0.0598 | 0.4074 | 0.1043 |
 | Enhanced (FCI+VIX) | 90th + VIX>20 | 0.4926 | N/A | N/A | 0.0476 | 0.0741 | 0.0580 |
-| Logistic Regression | 0.09 | 0.3009 | [0.2020, 0.4000] | ❌ | 0.0000 | 0.0000 | 0.0000 |
-| Random Forest | 0.03 | 0.4226 | [0.2935, 0.5503] | ❌ | 0.2143 | 0.0556 | 0.0950 |
-| **XGBoost** | **0.08** | **0.4545** | **[0.3597, 0.5530]** | **❌** | **0.0238** | **0.0370** | **0.0290** |
+| Logistic Regression | 0.09 | 0.3013 | [0.2077, 0.4057] | ❌ | 0.0000 | 0.0000 | 0.0000 |
+| Random Forest | 0.03 | 0.4226 | [0.2887, 0.5460] | ❌ | 0.2143 | 0.0556 | 0.0950 |
+| **XGBoost** | **0.08** | **0.4756** | **[0.3906, 0.5621]** | **❌** | **0.0256** | **0.0370** | **0.0303** |
 
 ### 5.4 Statistical Significance (XGBoost — Best Model)
 
 | Test | Value | Interpretation |
 |------|-------|----------------|
-| Observed AUC | 0.4545 | Below random (0.5) |
-| 95% CI Lower | 0.3597 | Below 0.5 |
-| 95% CI Upper | 0.5530 | Above 0.5 |
+| Observed AUC | 0.4756 | Below random (0.5) |
+| 95% CI Lower | 0.3906 | Below 0.5 |
+| 95% CI Upper | 0.5621 | Above 0.5 |
 | **CI includes 0.5?** | **YES** | **NOT significant** |
-| ECE | 0.0183 | Well-calibrated |
+| ECE | 0.0199 | Well-calibrated |
 | Verdict | WARNING | Not significant (CI includes 0.5) |
 
 ### 5.5 Key Findings
 
-1. **Heuristic rule outperforms ML models:** FCI > 90% (AUC 0.5115) beats XGBoost (AUC 0.4545)
+1. **Heuristic rule outperforms ML models:** FCI > 90% (AUC 0.5115) beats XGBoost (AUC 0.4756)
 2. **No model is statistically significant:** All 95% CIs include 0.5
 3. **Adding FRED macroeconomic data did not improve signal:** Yield curve and credit spread features showed correlations ≤ 0.04
-4. **Model is well-calibrated but useless:** ECE = 0.0183, but no discriminative power
+4. **Model is well-calibrated but useless:** ECE = 0.0199, but no discriminative power
 5. **Null hypothesis cannot be rejected:** The data does not support reliable prediction
 6. **Features are too weak:** All correlations < 0.1
 
@@ -213,12 +213,12 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 
 | Criterion | Target | Actual | Status |
 |-----------|--------|--------|--------|
-| Outperform threshold baseline | AUC > 0.70 | AUC 0.4545 | ❌ |
-| Statistical significance | CI excludes 0.5 | CI [0.3597, 0.5530] | ❌ |
+| Outperform threshold baseline | AUC > 0.70 | AUC 0.4756 | ❌ |
+| Statistical significance | CI excludes 0.5 | CI [0.3906, 0.5621] | ❌ |
 | Detect > 60% of events | Recall > 0.6 | Recall 0.0370 | ❌ |
-| False positive rate < 30% | FPR < 0.3 | FPR 0.0176 | ✅ |
-| Precision > 0.30 | Precision > 0.30 | Precision 0.0238 | ❌ |
-| Calibration | ECE < 0.10 | ECE 0.0183 | ✅ |
+| False positive rate < 30% | FPR < 0.3 | FPR 0.0844 | ✅ |
+| Precision > 0.30 | Precision > 0.30 | Precision 0.0256 | ❌ |
+| Calibration | ECE < 0.10 | ECE 0.0199 | ✅ |
 
 **Overall Status:** ❌ **Not successful for practical use.** Model does not meet criteria for reliable early warning system.
 
@@ -238,7 +238,7 @@ After rigorous testing with proper validation methodology:
 | Requirement | Current | Needed |
 |-------------|---------|--------|
 | Feature correlation | < 0.1 | > 0.2 |
-| Precision | 0.0238 | > 0.30 |
+| Precision | 0.0256 | > 0.30 |
 | Test events | 27 | 100+ |
 | Data timeframe | 2010-2024 | Extended to 2029+ |
 
@@ -253,7 +253,28 @@ After rigorous testing with proper validation methodology:
 
 ---
 
-## 8. Repository Structure
+## 8. Statistical Power Analysis
+
+With only 27 test events, the statistical power to detect a real effect is limited.
+
+| Parameter | Value |
+|-----------|-------|
+| Test samples | 477 |
+| Positive events | 27 |
+| Negative events | 450 |
+| Observed AUC (XGBoost) | 0.4756 |
+| 95% CI | [0.3906, 0.5621] |
+
+**Implication:** The failure to reject the null hypothesis may be due to:
+1. Insufficient statistical power (small test set)
+2. Weak features (all correlations < 0.1)
+3. Both factors combined
+
+A larger test set (100+ events) would be needed to detect small-to-moderate effects (AUC > 0.55). With the current sample size, only very large effects (AUC > 0.68) would be detectable at 80% power.
+
+---
+
+## 9. Repository Structure
 
 ```
 factor-exposure-sentinel/
@@ -287,7 +308,7 @@ factor-exposure-sentinel/
 
 ---
 
-## 9. Project Roadmap
+## 10. Project Roadmap
 
 - [x] **Phase 0: Problem Framing** — Formal definition of target, features, methodology
 - [x] **Phase 1: Data Pipeline** — Leakage-free data fetching and preprocessing
@@ -299,7 +320,7 @@ factor-exposure-sentinel/
 
 ---
 
-## 10. Project Contributions
+## 11. Project Contributions
 
 1. **A Reproducible Benchmark:** A rigorous, time-aware pipeline for factor risk monitoring using public data
 2. **Prevention of Look-Ahead Bias:** Practical implementation strategies to avoid data leakage in financial ML
@@ -310,17 +331,18 @@ factor-exposure-sentinel/
 
 ---
 
-## 11. Limitations
+## 12. Limitations
 
 - **Data Constraints:** Utilizes price data only; does not incorporate proprietary flow data, 13F institutional ownership, or short-interest metrics
 - **Feature Strength:** All feature correlations < 0.1, indicating very weak signal
 - **Factor Coverage:** Limited to standard publicly available factor families
 - **Synthetic Portfolios:** May not capture real institutional portfolio complexity
 - **Test Period:** Only 27 events in test period (2023-2024)
+- **Statistical Power:** With 27 test events, the ability to detect a real effect is limited
 
 ---
 
-## 12. Hypotheses for Future Work
+## 13. Hypotheses for Future Work
 
 If this research were to continue, the following hypotheses should be tested:
 
@@ -334,7 +356,7 @@ If this research were to continue, the following hypotheses should be tested:
 
 ---
 
-## 13. Quick Start
+## 14. Quick Start
 
 ### Installation
 
@@ -373,7 +395,7 @@ explorer outputs/figures/  # On Windows
 
 ---
 
-## 14. License & Disclaimer
+## 15. License & Disclaimer
 
 **License:** MIT
 
@@ -381,11 +403,32 @@ explorer outputs/figures/  # On Windows
 
 ---
 
-## 15. Author Information
+## 16. Author Information
 
 **Ken Ira Lacson Talingting**
 - GitHub: [github.com/kira-ml](https://github.com/kira-ml)
 - LinkedIn: [linkedin.com/in/ken-ira-lacson-852026343](https://www.linkedin.com/in/ken-ira-lacson-852026343/)
+
+---
+
+## 17. Results Source
+
+**Definitive results:** See `outputs/all_runs.csv` and `outputs/run_20260909_012949/metrics.json` for the complete set of metrics.
+
+**Key values used in this document:**
+
+| Metric | Value |
+|--------|-------|
+| XGBoost AUC-ROC | 0.4756 |
+| XGBoost 95% CI | [0.3906, 0.5621] |
+| XGBoost Precision | 0.0256 |
+| XGBoost Recall | 0.0370 |
+| XGBoost F1 | 0.0303 |
+| XGBoost ECE | 0.0199 |
+| XGBoost Threshold | 0.08 |
+| Heuristic AUC-ROC | 0.5115 |
+| Random Forest AUC-ROC | 0.4226 |
+| Logistic Regression AUC-ROC | 0.3013 |
 
 ---
 

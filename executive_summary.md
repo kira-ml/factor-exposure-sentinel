@@ -105,6 +105,7 @@ Y_t = 0 otherwise
 | Yahoo Finance (`yfinance`) | ETF Prices (SPY, AGG, GLD, IJS, EFA) | Daily |
 | Yahoo Finance (`yfinance`) | VIX (^VIX) | Daily |
 | Yahoo Finance (`yfinance`) | Credit Spread (HYG/LQD Ratio) | Daily |
+| FRED (via `pandas_datareader`) | Yield Curve (T10Y2Y), Baa-10yr Spread (BAA10YM) | Daily |
 
 **Portfolio Construction:** Synthetic multi-asset portfolio with equal weights:
 
@@ -144,9 +145,9 @@ Y_t = 0 otherwise
 
 | Split | Period | Purpose | Samples |
 |-------|--------|---------|---------|
-| **Training** | January 2010 – December 2016 | Model training, feature engineering | 1,509 |
-| **Validation** | January 2017 – December 2022 | Threshold tuning, hyperparameter selection | 1,510 |
-| **Test** | January 2023 – December 2024 | **ONE-TIME** final evaluation | 500 (27 events) |
+| **Training** | January 2010 – December 2016 | Model training, feature engineering | 1,497 |
+| **Validation** | January 2017 – December 2022 | Threshold tuning, hyperparameter selection | 1,499 |
+| **Test** | January 2023 – December 2024 | **ONE-TIME** final evaluation | 477 (27 events) |
 
 ### 4.2 Models Tested
 
@@ -175,12 +176,12 @@ Y_t = 0 otherwise
 
 | Metric | Value |
 |--------|-------|
-| Total days | 3,773 |
+| Total days | 3,753 |
 | Total events | 338 |
-| Event rate | 8.96% |
+| Event rate | 9.01% |
 | Crisis event rate (COVID-19) | 34.9% |
 | Normal event rate | 8.4% |
-| Crisis/Normal ratio | **4.17x** |
+| Crisis/Normal ratio | **4.15x** |
 | Total clusters | 33 |
 | Largest cluster | 29 events (Jan-Mar 2020) |
 
@@ -190,11 +191,11 @@ Y_t = 0 otherwise
 
 | Feature | Correlation with Target |
 |---------|------------------------|
-| log_vix | 0.0771 |
-| vix_level | 0.0636 |
-| fci_change_30 | 0.0585 |
-| fci_change_20 | 0.0539 |
-| beta_CMA | 0.0418 |
+| log_vix | 0.0766 |
+| vix_level | 0.0630 |
+| fci_change_30 | 0.0584 |
+| fci_change_20 | 0.0538 |
+| beta_CMA | 0.0428 |
 
 **Key Finding:** All feature correlations are < 0.1, indicating very weak individual predictive signal. This explains why ML models struggle to outperform simple rules.
 
@@ -202,21 +203,21 @@ Y_t = 0 otherwise
 
 | Model | AUC-ROC | 95% CI | Significant? | Precision | Recall | F1 |
 |-------|---------|--------|--------------|-----------|--------|-----|
-| Heuristic (FCI 90%) | 0.5198 | N/A | N/A | 0.0595 | 0.4074 | 0.1038 |
-| Enhanced (FCI+VIX) | 0.4948 | N/A | N/A | 0.0476 | 0.0741 | 0.0580 |
-| Logistic Regression | 0.3478 | [0.2614, 0.4350] | ❌ | 0.0879 | 0.0741 | 0.0800 |
-| Random Forest | 0.2872 | [0.1865, 0.3885] | ❌ | 0.0571 | 0.1481 | 0.0825 |
-| **XGBoost** | **0.4949** | **[0.4057, 0.5842]** | **❌** | **0.0377** | **0.0741** | **0.0500** |
+| Heuristic (FCI 90%) | 0.5115 | N/A | N/A | 0.0598 | 0.4074 | 0.1043 |
+| Enhanced (FCI+VIX) | 0.4926 | N/A | N/A | 0.0476 | 0.0741 | 0.0580 |
+| Logistic Regression | 0.3013 | [0.2077, 0.4057] | ❌ | 0.0000 | 0.0000 | 0.0000 |
+| Random Forest | 0.4226 | [0.2887, 0.5460] | ❌ | 0.2143 | 0.0556 | 0.0950 |
+| **XGBoost** | **0.4756** | **[0.3906, 0.5621]** | **❌** | **0.0256** | **0.0370** | **0.0303** |
 
 ### 5.4 Statistical Significance (XGBoost)
 
 | Test | Value | Interpretation |
 |------|-------|----------------|
-| Observed AUC | 0.4949 | Below random (0.5) |
-| 95% CI Lower | 0.4057 | Below 0.5 |
-| 95% CI Upper | 0.5842 | Above 0.5 |
+| Observed AUC | 0.4756 | Below random (0.5) |
+| 95% CI Lower | 0.3906 | Below 0.5 |
+| 95% CI Upper | 0.5621 | Above 0.5 |
 | **CI includes 0.5?** | **YES** | **NOT significant** |
-| ECE | 0.0258 | Well-calibrated |
+| ECE | 0.0199 | Well-calibrated |
 | Verdict | WARNING | Not significant (CI includes 0.5) |
 
 ---
@@ -227,12 +228,13 @@ Y_t = 0 otherwise
 
 After rigorous testing with proper validation methodology:
 
-1. **Heuristic rule outperforms ML models**: FCI > 90% (AUC 0.5198) beats XGBoost (AUC 0.4949)
+1. **Heuristic rule outperforms ML models**: FCI > 90% (AUC 0.5115) beats XGBoost (AUC 0.4756)
 2. **No model is statistically significant**: All 95% CIs include 0.5
-3. **XGBoost achieves near-random performance**: AUC 0.4949, CI includes 0.5
-4. **Model is well-calibrated but useless**: ECE = 0.0258, but no discriminative power
+3. **XGBoost achieves near-random performance**: AUC 0.4756, CI includes 0.5
+4. **Model is well-calibrated but useless**: ECE = 0.0199, but no discriminative power
 5. **Features are too weak**: All correlations < 0.1
 6. **The data does not support reliable prediction**: Null hypothesis cannot be rejected
+7. **Macroeconomic data does not add signal**: FRED yield curve and credit spread features showed no correlation with target
 
 ### 6.2 What the Data Tells Us
 
@@ -248,8 +250,8 @@ After rigorous testing with proper validation methodology:
 | Requirement | Current | Needed |
 |-------------|---------|--------|
 | Feature correlation | < 0.1 | > 0.2 |
-| Precision | 0.0377 | > 0.30 |
-| Recall | 0.0741 | > 0.60 |
+| Precision | 0.0256 | > 0.30 |
+| Recall | 0.0370 | > 0.60 |
 | Test events | 27 | 100+ |
 | Data timeframe | 2010-2024 | Extended to 2029+ |
 | Data type | Public only | Proprietary (flows, positioning, 13F) |
@@ -268,6 +270,7 @@ After rigorous testing with proper validation methodology:
 | **Negative results are valuable** | Save others from pursuing weak signals |
 | **Public data is insufficient** | Proprietary data likely required for reliable prediction |
 | **Start simple** | Heuristic rule outperformed all ML models |
+| **Macro data doesn't help** | FRED yield curve and credit spread features showed no correlation |
 
 ### 7.2 Implications for Practitioners
 
@@ -306,7 +309,7 @@ This negative result saves time and money for everyone who would have tried this
 
 | Impact | Description |
 |--------|-------------|
-| **Avoided false hedges** | PMs won't overreact to false alarms (precision = 0.0377 → 96% false positives) |
+| **Avoided false hedges** | PMs won't overreact to false alarms (precision = 0.0256 → 97% false positives) |
 | **Redirected research** | Industry can focus on proprietary data where signal exists |
 | **Better benchmarking** | Established reproducible baseline for factor crowding research |
 | **Honest expectation setting** | Don't expect public data to solve this prediction problem |
@@ -317,30 +320,51 @@ This negative result saves time and money for everyone who would have tried this
 
 | Criterion | Target | Actual | Status |
 |-----------|--------|--------|--------|
-| Outperform threshold baseline | AUC > 0.70 | AUC 0.4949 | ❌ |
-| Statistical significance | CI excludes 0.5 | CI [0.4057, 0.5842] | ❌ |
-| Detect > 60% of events | Recall > 0.6 | Recall 0.0741 | ❌ |
-| False positive rate < 30% | FPR < 0.3 | FPR 0.1078 | ✅ |
-| Precision > 0.30 | Precision > 0.30 | Precision 0.0377 | ❌ |
-| Calibration | ECE < 0.10 | ECE 0.0258 | ✅ |
+| Outperform threshold baseline | AUC > 0.70 | AUC 0.4756 | ❌ |
+| Statistical significance | CI excludes 0.5 | CI [0.3906, 0.5621] | ❌ |
+| Detect > 60% of events | Recall > 0.6 | Recall 0.0370 | ❌ |
+| False positive rate < 30% | FPR < 0.3 | FPR 0.0844 | ✅ |
+| Precision > 0.30 | Precision > 0.30 | Precision 0.0256 | ❌ |
+| Calibration | ECE < 0.10 | ECE 0.0199 | ✅ |
 
 **Overall Status:** ❌ **Not successful for practical use.** Model does not meet criteria for reliable early warning system.
 
 ---
 
-## 10. Open-Source Contribution
+## 10. Statistical Power Analysis
 
-### 10.1 What This Project Contributes
+With only 27 test events, the statistical power to detect a real effect is limited.
+
+| Parameter | Value |
+|-----------|-------|
+| Test samples | 477 |
+| Positive events | 27 |
+| Negative events | 450 |
+| Observed AUC (XGBoost) | 0.4756 |
+| 95% CI | [0.3906, 0.5621] |
+
+**Implication:** The failure to reject the null hypothesis may be due to:
+1. Insufficient statistical power (small test set)
+2. Weak features (all correlations < 0.1)
+3. Both factors combined
+
+A larger test set (100+ events) would be needed to detect small-to-moderate effects (AUC > 0.55). With the current sample size, only very large effects (AUC > 0.68) would be detectable at 80% power.
+
+---
+
+## 11. Open-Source Contribution
+
+### 11.1 What This Project Contributes
 
 1. ✅ A reproducible, rigorous benchmark for factor crowding detection
 2. ✅ Honest documentation of a negative result with full transparency
 3. ✅ Bootstrap confidence intervals and calibration testing for statistical rigor
 4. ✅ Prevention of look-ahead bias in financial ML
-5. ✅ Publication-quality visualizations (7 figures in PDF + PNG)
+5. ✅ Publication-quality visualizations (6 figures in PDF + PNG)
 6. ✅ Complete experiment tracking with `outputs/all_runs.csv`
 7. ✅ Clear evidence that public data is insufficient for this prediction task
 
-### 10.2 Repository Structure
+### 11.2 Repository Structure
 
 ```
 factor-exposure-sentinel/
@@ -364,19 +388,18 @@ factor-exposure-sentinel/
 └── outputs/                     # (gitignored) Results tracking
     ├── all_runs.csv             # All experiment results
     ├── run_*/metrics.json       # Per-run metrics
-    └── figures_academic/        # Publication-quality figures
-        ├── Figure1_Event_Timeline.{pdf,png}
-        ├── Figure2_Regime_Comparison.{pdf,png}
-        ├── Figure3_Feature_Correlations.{pdf,png}
-        ├── Figure4_Model_Comparison.{pdf,png}
-        ├── Figure5_Calibration_Curve.{pdf,png}
-        ├── Figure6_ROC_Curves.{pdf,png}
-        └── Figure7_Precision_Recall.{pdf,png}
+    └── figures/                 # Publication-quality figures
+        ├── fig1_event_timeline.{pdf,png}
+        ├── fig2_regime_comparison.{pdf,png}
+        ├── fig3_feature_correlations.{pdf,png}
+        ├── fig4_model_comparison.{pdf,png}
+        ├── fig5_calibration_curve.{pdf,png}
+        └── fig6_precision_recall.{pdf,png}
 ```
 
 ---
 
-## 11. Quick Start
+## 12. Quick Start
 
 ### Installation
 
@@ -407,13 +430,13 @@ python main.py --use-cache
 cat outputs/all_runs.csv
 
 # View visualizations
-open outputs/figures_academic/  # On macOS
-explorer outputs\figures_academic\  # On Windows
+open outputs/figures/  # On macOS
+explorer outputs\figures\  # On Windows
 ```
 
 ---
 
-## 12. Limitations
+## 13. Limitations
 
 | Limitation | Implication |
 |------------|-------------|
@@ -426,29 +449,29 @@ explorer outputs\figures_academic\  # On Windows
 
 ---
 
-## 13. Conclusion
+## 14. Conclusion
 
-### 13.1 The Bottom Line
+### 14.1 The Bottom Line
 
 > *"Public data cannot reliably predict factor-concentration drawdowns. No ML model improved on a simple threshold rule. The signal is too weak. Move on to proprietary data or a different problem."*
 
-### 13.2 What We Found
+### 14.2 What We Found
 
 This project set out to determine whether factor concentration events can be reliably predicted using public data and machine learning. After rigorous experimentation with proper validation methodology:
 
 **No statistically significant predictive relationship was found.**
 
-The XGBoost model, despite being well-calibrated (ECE = 0.0258), fails on all practical criteria:
+The XGBoost model, despite being well-calibrated (ECE = 0.0199), fails on all practical criteria:
 
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
-| AUC-ROC | 0.4949 | > 0.70 | ❌ |
-| 95% CI | [0.4057, 0.5842] | Excludes 0.5 | ❌ |
-| Precision | 0.0377 | > 0.30 | ❌ |
-| Recall | 0.0741 | > 0.60 | ❌ |
-| F1 | 0.0500 | > 0.30 | ❌ |
+| AUC-ROC | 0.4756 | > 0.70 | ❌ |
+| 95% CI | [0.3906, 0.5621] | Excludes 0.5 | ❌ |
+| Precision | 0.0256 | > 0.30 | ❌ |
+| Recall | 0.0370 | > 0.60 | ❌ |
+| F1 | 0.0303 | > 0.30 | ❌ |
 
-### 13.3 Why This Result Matters
+### 14.3 Why This Result Matters
 
 The primary bottleneck is the weakness of available features (all correlations < 0.1), which provides insufficient predictive signal. Even with 338 events over 15 years, the model cannot distinguish signal from noise.
 
@@ -459,7 +482,7 @@ The primary bottleneck is the weakness of available features (all correlations <
 - It saves others from pursuing weak signals with public data
 - It highlights the need for proprietary data (positioning, flows, short interest) for reliable prediction
 
-### 13.4 Future Work
+### 14.4 Future Work
 
 Future work would require alternative data sources (options flow, 13F filings, proprietary positioning data), better features (nonlinear transformations, interaction terms), or a revised target definition.
 
@@ -473,7 +496,29 @@ Future work would require alternative data sources (options flow, 13F filings, p
 
 ---
 
-## 14. License & Disclaimer
+## 15. Results Source
+
+**Definitive results:** See `outputs/all_runs.csv` and `outputs/run_20260909_012949/metrics.json` for the complete set of metrics.
+
+**Key values used in this document:**
+
+| Metric | Value |
+|--------|-------|
+| XGBoost AUC-ROC | 0.4756 |
+| XGBoost 95% CI | [0.3906, 0.5621] |
+| XGBoost Precision | 0.0256 |
+| XGBoost Recall | 0.0370 |
+| XGBoost F1 | 0.0303 |
+| XGBoost ECE | 0.0199 |
+| XGBoost Threshold | 0.08 |
+| XGBoost FPR | 0.0844 |
+| Heuristic AUC-ROC | 0.5115 |
+| Random Forest AUC-ROC | 0.4226 |
+| Logistic Regression AUC-ROC | 0.3013 |
+
+---
+
+## 16. License & Disclaimer
 
 **License:** MIT
 
@@ -481,7 +526,7 @@ Future work would require alternative data sources (options flow, 13F filings, p
 
 ---
 
-## 15. Author Information
+## 17. Author Information
 
 **Ken Ira Lacson Talingting**
 - GitHub: [github.com/kira-ml](https://github.com/kira-ml)
@@ -489,7 +534,7 @@ Future work would require alternative data sources (options flow, 13F filings, p
 
 ---
 
-## 16. References
+## 18. References
 
 1. Arnott, R., Kalesnik, V., & Wu, L. (2019). The incredible shrinking factor return. *Journal of Portfolio Management*.
 

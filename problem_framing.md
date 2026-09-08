@@ -92,7 +92,8 @@ Y_{t, h} =
 
 - **Prediction Horizon:** \( h = 21 \) trading days (1 month)
 - **Portfolio Construction:** Synthetic multi-asset portfolio (equal-weighted ETFs)
-- **Data Period:** January 2010 – December 2024 (3,773 trading days)
+- **Data Period:** January 2010 – December 2024 (3,753 trading days)
+- **Total Events:** 338 (9.01% event rate)
 
 ### 4.5 Features Available at Prediction Time
 
@@ -123,6 +124,7 @@ Y_{t, h} =
 | Yahoo Finance (`yfinance`) | ETF Prices (SPY, AGG, GLD, IJS, EFA) | Daily |
 | Yahoo Finance (`yfinance`) | VIX (^VIX) | Daily |
 | Yahoo Finance (`yfinance`) | Credit Spread (HYG/LQD) | Daily |
+| FRED (via `pandas_datareader`) | Yield Curve (T10Y2Y), Baa-10yr Spread (BAA10YM) | Daily |
 
 ### 5.2 Portfolio Construction
 
@@ -157,11 +159,12 @@ Synthetic multi-asset portfolios constructed from ETFs with equal weights:
 
 | Limitation | Implication |
 |------------|-------------|
-| **Event count: 338 total (8.96% rate)** | Sufficient for modeling, but signal remains weak |
+| **Event count: 338 total (9.01% rate)** | Sufficient for modeling, but signal remains weak |
 | **Feature correlations < 0.1** | Very weak individual predictive signal |
 | **Public factors only** | May miss proprietary crowding signals |
 | **Synthetic portfolios** | May not capture real institutional portfolio complexity |
 | **Limited test period: 2023-2024** | Only 27 test events |
+| **Statistical power** | Limited ability to detect small-to-moderate effects |
 
 ---
 
@@ -171,9 +174,9 @@ Synthetic multi-asset portfolios constructed from ETFs with equal weights:
 
 - **Time-Aware Splitting**: Strict chronological order maintained
 - **Three-Way Split**: 
-  - Train: 2010-2016 (1,509 samples)
-  - Validation: 2017-2022 (1,510 samples)
-  - Test: 2023-2024 (500 samples, 27 events)
+  - Train: 2010-2016 (1,497 samples)
+  - Validation: 2017-2022 (1,499 samples)
+  - Test: 2023-2024 (477 samples, 27 events)
 - **Bootstrap Confidence Intervals**: 95% CI for AUC-ROC (1,000 iterations)
 - **Calibration Testing**: Expected Calibration Error (ECE)
 - **Significance Testing**: CI includes 0.5 → not significant
@@ -231,12 +234,12 @@ For the model to be practically useful:
 
 | Metric | Value |
 |--------|-------|
-| Total days | 3,773 |
+| Total days | 3,753 |
 | Total events | 338 |
-| Event rate | 8.96% |
+| Event rate | 9.01% |
 | Crisis event rate (COVID) | 34.9% |
 | Normal event rate | 8.4% |
-| Crisis/Normal ratio | 4.17x |
+| Crisis/Normal ratio | 4.15x |
 | Total clusters | 33 |
 | Largest cluster | 29 events (Jan-Mar 2020) |
 
@@ -246,11 +249,11 @@ For the model to be practically useful:
 
 | Feature | Correlation with Target |
 |---------|------------------------|
-| log_vix | 0.0771 |
-| vix_level | 0.0636 |
-| fci_change_30 | 0.0585 |
-| fci_change_20 | 0.0539 |
-| beta_CMA | 0.0418 |
+| log_vix | 0.0766 |
+| vix_level | 0.0630 |
+| fci_change_30 | 0.0584 |
+| fci_change_20 | 0.0538 |
+| beta_CMA | 0.0428 |
 
 **Key Finding:** All feature correlations are < 0.1, indicating very weak individual predictive signal. This explains why ML models struggle to outperform simple rules.
 
@@ -258,31 +261,32 @@ For the model to be practically useful:
 
 | Model | AUC-ROC | 95% CI | Significant? | Precision | Recall | F1 |
 |-------|---------|--------|--------------|-----------|--------|-----|
-| Heuristic (FCI 90%) | 0.5198 | N/A | N/A | 0.0595 | 0.4074 | 0.1038 |
-| Enhanced (FCI+VIX) | 0.4948 | N/A | N/A | 0.0476 | 0.0741 | 0.0580 |
-| Logistic Regression | 0.3478 | [0.2614, 0.4350] | ❌ | 0.0879 | 0.0741 | 0.0800 |
-| Random Forest | 0.2872 | [0.1865, 0.3885] | ❌ | 0.0571 | 0.1481 | 0.0825 |
-| **XGBoost** | **0.4798** | **[0.3795, 0.5805]** | **❌** | **0.1025** | **1.0000** | **0.1862** |
+| Heuristic (FCI 90%) | 0.5115 | N/A | N/A | 0.0598 | 0.4074 | 0.1043 |
+| Enhanced (FCI+VIX) | 0.4926 | N/A | N/A | 0.0476 | 0.0741 | 0.0580 |
+| Logistic Regression | 0.3013 | [0.2077, 0.4057] | ❌ | 0.0000 | 0.0000 | 0.0000 |
+| Random Forest | 0.4226 | [0.2887, 0.5460] | ❌ | 0.2143 | 0.0556 | 0.0950 |
+| **XGBoost** | **0.4756** | **[0.3906, 0.5621]** | **❌** | **0.0256** | **0.0370** | **0.0303** |
 
 ### 9.4 Statistical Significance (XGBoost — Best Model)
 
 | Test | Value | Interpretation |
 |------|-------|----------------|
-| Observed AUC | 0.4798 | Below random (0.5) |
-| 95% CI Lower | 0.3795 | Below 0.5 |
-| 95% CI Upper | 0.5805 | Above 0.5 |
+| Observed AUC | 0.4756 | Below random (0.5) |
+| 95% CI Lower | 0.3906 | Below 0.5 |
+| 95% CI Upper | 0.5621 | Above 0.5 |
 | **CI includes 0.5?** | **YES** | **NOT significant** |
-| ECE | 0.0318 | Well-calibrated |
+| ECE | 0.0199 | Well-calibrated |
 | Verdict | WARNING | Not significant (CI includes 0.5) |
 
 ### 9.5 Key Findings
 
-1. **Heuristic rule outperforms ML models**: FCI > 90% (AUC 0.5198) beats XGBoost (AUC 0.4798)
+1. **Heuristic rule outperforms ML models**: FCI > 90% (AUC 0.5115) beats XGBoost (AUC 0.4756)
 2. **No model is statistically significant**: All 95% CIs include 0.5
-3. **XGBoost achieves perfect recall but low precision**: Recall = 1.000, Precision = 0.1025
-4. **Model is well-calibrated but useless**: ECE = 0.0318, but no discriminative power
+3. **XGBoost achieves low precision and recall**: Precision = 0.0256, Recall = 0.0370
+4. **Model is well-calibrated but useless**: ECE = 0.0199, but no discriminative power
 5. **Null hypothesis cannot be rejected**: The data does not support reliable prediction
 6. **Features are too weak**: All correlations < 0.1
+7. **Macroeconomic data does not add signal**: FRED yield curve and credit spread features showed no correlation with target
 
 ---
 
@@ -290,12 +294,12 @@ For the model to be practically useful:
 
 | Criterion | Target | Actual | Status |
 |-----------|--------|--------|--------|
-| Outperform threshold baseline | AUC > 0.70 | AUC 0.4798 | ❌ |
-| Statistical significance | CI excludes 0.5 | CI [0.3795, 0.5805] | ❌ |
-| Detect > 60% of events | Recall > 0.6 | Recall 1.000 | ✅ |
-| False positive rate < 30% | FPR < 0.3 | FPR 0.50 | ❌ |
-| Precision > 0.30 | Precision > 0.30 | Precision 0.1025 | ❌ |
-| Calibration | ECE < 0.10 | ECE 0.0318 | ✅ |
+| Outperform threshold baseline | AUC > 0.70 | AUC 0.4756 | ❌ |
+| Statistical significance | CI excludes 0.5 | CI [0.3906, 0.5621] | ❌ |
+| Detect > 60% of events | Recall > 0.6 | Recall 0.0370 | ❌ |
+| False positive rate < 30% | FPR < 0.3 | FPR 0.0844 | ✅ |
+| Precision > 0.30 | Precision > 0.30 | Precision 0.0256 | ❌ |
+| Calibration | ECE < 0.10 | ECE 0.0199 | ✅ |
 
 **Overall Status:** ❌ **Not successful for practical use.** Model does not meet criteria for reliable early warning system.
 
@@ -315,7 +319,7 @@ After rigorous testing with proper validation methodology:
 | Requirement | Current | Needed |
 |-------------|---------|--------|
 | Feature correlation | < 0.1 | > 0.2 |
-| Precision | 0.1025 | > 0.30 |
+| Precision | 0.0256 | > 0.30 |
 | Test events | 27 | 100+ |
 | Data timeframe | 2010-2024 | Extended to 2029+ |
 
@@ -326,10 +330,32 @@ After rigorous testing with proper validation methodology:
 3. **Statistical testing is non-negotiable**: Bootstrap CI revealed noise
 4. **Negative results are valuable**: Save others from pursuing weak signals
 5. **Public data is insufficient**: Proprietary data (flows, positioning) likely required
+6. **Macroeconomic data does not add signal**: FRED yield curve and credit spread features showed no correlation with target
 
 ---
 
-## 12. Hypotheses for Future Work
+## 12. Statistical Power Analysis
+
+With only 27 test events, the statistical power to detect a real effect is limited.
+
+| Parameter | Value |
+|-----------|-------|
+| Test samples | 477 |
+| Positive events | 27 |
+| Negative events | 450 |
+| Observed AUC (XGBoost) | 0.4756 |
+| 95% CI | [0.3906, 0.5621] |
+
+**Implication:** The failure to reject the null hypothesis may be due to:
+1. Insufficient statistical power (small test set)
+2. Weak features (all correlations < 0.1)
+3. Both factors combined
+
+A larger test set (100+ events) would be needed to detect small-to-moderate effects (AUC > 0.55). With the current sample size, only very large effects (AUC > 0.68) would be detectable at 80% power.
+
+---
+
+## 13. Hypotheses for Future Work
 
 If this research were to continue, the following hypotheses should be tested:
 
@@ -343,7 +369,7 @@ If this research were to continue, the following hypotheses should be tested:
 
 ---
 
-## 13. Open-Source Contribution Value
+## 14. Open-Source Contribution Value
 
 This project contributes a **reproducible, rigorous benchmark** for the quant finance community:
 
@@ -355,7 +381,7 @@ This project contributes a **reproducible, rigorous benchmark** for the quant fi
 6. ✅ Publication-quality visualizations (6 figures, PDF+PNG)
 7. ✅ Complete experiment tracking with `outputs/all_runs.csv`
 
-### 13.1 Repository Structure
+### 14.1 Repository Structure
 
 ```
 factor-exposure-sentinel/
@@ -388,7 +414,7 @@ factor-exposure-sentinel/
 
 ---
 
-## 14. References & Related Work
+## 15. References & Related Work
 
 - Arnott, R., Kalesnik, V., & Wu, L. (2019). The incredible shrinking factor return. *Journal of Portfolio Management*.
 - Khandani, A. E., & Lo, A. W. (2007). What happened to the quants in August 2007? *Journal of Investment Management*.
@@ -398,17 +424,17 @@ factor-exposure-sentinel/
 
 ---
 
-## 15. Conclusion
+## 16. Conclusion
 
 This project set out to determine whether factor concentration events can be reliably predicted using public data and machine learning. After rigorous experimentation with proper validation methodology:
 
 **No statistically significant predictive relationship was found.**
 
-The XGBoost model, despite being well-calibrated (ECE = 0.0318), fails on all practical criteria:
-- AUC-ROC: 0.4798 (below random)
-- 95% CI: [0.3795, 0.5805] includes 0.5 → NOT significant
-- Precision: 0.1025 (9 out of 10 alerts are false alarms)
-- F1: 0.1862 (poor precision-recall balance)
+The XGBoost model, despite being well-calibrated (ECE = 0.0199), fails on all practical criteria:
+- AUC-ROC: 0.4756 (below random)
+- 95% CI: [0.3906, 0.5621] includes 0.5 → NOT significant
+- Precision: 0.0256 (39 out of 40 alerts are false alarms)
+- F1: 0.0303 (poor precision-recall balance)
 
 The primary bottleneck is the weakness of available features (all correlations < 0.1), which provides insufficient predictive signal. Even with 338 events over 15 years, the model cannot distinguish signal from noise.
 
@@ -421,7 +447,29 @@ Future work would require alternative data sources (options flow, 13F filings, p
 
 ---
 
-## 16. License & Disclaimer
+## 17. Results Source
+
+**Definitive results:** See `outputs/all_runs.csv` and `outputs/run_20260909_012949/metrics.json` for the complete set of metrics.
+
+**Key values used in this document:**
+
+| Metric | Value |
+|--------|-------|
+| XGBoost AUC-ROC | 0.4756 |
+| XGBoost 95% CI | [0.3906, 0.5621] |
+| XGBoost Precision | 0.0256 |
+| XGBoost Recall | 0.0370 |
+| XGBoost F1 | 0.0303 |
+| XGBoost ECE | 0.0199 |
+| XGBoost Threshold | 0.08 |
+| XGBoost FPR | 0.0844 |
+| Heuristic AUC-ROC | 0.5115 |
+| Random Forest AUC-ROC | 0.4226 |
+| Logistic Regression AUC-ROC | 0.3013 |
+
+---
+
+## 18. License & Disclaimer
 
 **License:** MIT
 
@@ -429,7 +477,7 @@ Future work would require alternative data sources (options flow, 13F filings, p
 
 ---
 
-## 17. Author Information
+## 19. Author Information
 
 **Ken Ira Lacson Talingting**
 - GitHub: [github.com/kira-ml](https://github.com/kira-ml)
