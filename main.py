@@ -22,6 +22,13 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 import warnings
 warnings.filterwarnings('ignore')
 
+# ============================================================================
+# FIX: Set global random seed for reproducibility
+# ============================================================================
+import random
+random.seed(42)
+np.random.seed(42)
+
 
 def evaluate_threshold_rule(features, target, train_idx, test_idx, 
                             fci_col='fci', threshold_pct=0.90, 
@@ -242,11 +249,18 @@ def main():
         from sklearn.calibration import CalibratedClassifierCV
         from sklearn.preprocessing import StandardScaler
         
+        # FIX: Compute scale_pos_weight dynamically from training data
+        # Formula: (1 - event_rate) / event_rate
+        # This balances the positive and negative classes
+        event_rate = y_train.mean()
+        scale_pos_weight = (1 - event_rate) / event_rate if event_rate > 0 else 10
+        print(f"   Scale_pos_weight: {scale_pos_weight:.2f} (event rate: {event_rate:.4f})")
+        
         xgb_model = ModelFactory.get_model('xgboost', 
                                            n_estimators=100,
                                            max_depth=4,
                                            learning_rate=0.1,
-                                           scale_pos_weight=10)
+                                           scale_pos_weight=scale_pos_weight)  # <-- DYNAMIC
         
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)

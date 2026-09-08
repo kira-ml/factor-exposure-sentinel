@@ -70,7 +70,7 @@ def evaluate_model(y_true: pd.Series, y_pred_proba: pd.Series, threshold: float 
     return results
 
 
-def bootstrap_confidence_interval(y_true, y_pred_proba, n_iterations=1000, ci=0.95):
+def bootstrap_confidence_interval(y_true, y_pred_proba, n_iterations=1000, ci=0.95, random_state=42):
     """
     Calculate bootstrap confidence interval for AUC using percentile method.
     Valid for all sample sizes. Does not assume normality of AUC distribution.
@@ -82,10 +82,13 @@ def bootstrap_confidence_interval(y_true, y_pred_proba, n_iterations=1000, ci=0.
     y_true = np.array(y_true)
     y_pred_proba = np.array(y_pred_proba)
     
+    # FIX: Use seeded random number generator for reproducibility
+    rng = np.random.RandomState(random_state)
+    
     # Standard percentile bootstrap – always used, regardless of sample size
     aucs = []
     for _ in range(n_iterations):
-        idx = np.random.choice(n, n, replace=True)
+        idx = rng.choice(n, n, replace=True)  # <-- SEEDED
         y_true_boot = y_true[idx]
         y_pred_boot = y_pred_proba[idx]
         if len(np.unique(y_true_boot)) < 2:
