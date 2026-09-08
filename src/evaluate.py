@@ -72,9 +72,8 @@ def evaluate_model(y_true: pd.Series, y_pred_proba: pd.Series, threshold: float 
 
 def bootstrap_confidence_interval(y_true, y_pred_proba, n_iterations=1000, ci=0.95):
     """
-    Calculate bootstrap confidence interval for AUC.
-    For small n, use a bias-corrected approach.
-    If the CI includes 0.5, your model is not better than random.
+    Calculate bootstrap confidence interval for AUC using percentile method.
+    Valid for all sample sizes. Does not assume normality of AUC distribution.
     """
     from sklearn.metrics import roc_auc_score
     import numpy as np
@@ -83,55 +82,27 @@ def bootstrap_confidence_interval(y_true, y_pred_proba, n_iterations=1000, ci=0.
     y_true = np.array(y_true)
     y_pred_proba = np.array(y_pred_proba)
     
-    # If too few positives, use Clopper-Pearson style CI on precision/recall
-    if y_true.sum() < 30:
-        pos_count = y_true.sum()
-        auc = roc_auc_score(y_true, y_pred_proba)
-        
-        # Bootstrap for std error (with fewer iterations for speed)
-        aucs = []
-        for _ in range(min(n_iterations, 500)):
-            idx = np.random.choice(n, n, replace=True)
-            y_true_boot = y_true[idx]
-            y_pred_boot = y_pred_proba[idx]
-            if len(np.unique(y_true_boot)) < 2:
-                continue
-            aucs.append(roc_auc_score(y_true_boot, y_pred_boot))
-        
-        if len(aucs) < 100:
-            # Fallback: use approximate standard error
-            q1 = auc / (2 - auc)
-            q2 = (2 * auc ** 2) / (1 + auc)
-            se = np.sqrt((auc * (1 - auc) + (pos_count - 1) * (q1 - auc ** 2) + 
-                         (n - pos_count - 1) * (q2 - auc ** 2)) / (pos_count * (n - pos_count)))
-        else:
-            se = np.std(aucs)
-            
-        lower = max(0, auc - 1.96 * se)
-        upper = min(1, auc + 1.96 * se)
-        
-        return {
-            'mean': auc,
-            'std': se,
-            'ci_lower': lower,
-            'ci_upper': upper,
-            'ci_width': upper - lower,
-            'includes_0.5': lower < 0.5 < upper,
-            'is_significant': lower > 0.5
-        }
-    
-    # Standard bootstrap for larger samples
+    # Standard percentile bootstrap – always used, regardless of sample size
     aucs = []
     for _ in range(n_iterations):
-        indices = np.random.choice(n, n, replace=True)
-        y_true_boot = y_true[indices]
-        y_pred_boot = y_pred_proba[indices]
-        
+        idx = np.random.choice(n, n, replace=True)
+        y_true_boot = y_true[idx]
+        y_pred_boot = y_pred_proba[idx]
         if len(np.unique(y_true_boot)) < 2:
             continue
-            
-        auc = roc_auc_score(y_true_boot, y_pred_boot)
-        aucs.append(auc)
+        aucs.append(roc_auc_score(y_true_boot, y_pred_boot))
+    
+    # Fallback in case all resamples are degenerate (rare)
+    if len(aucs) == 0:
+        return {
+            'mean': roc_auc_score(y_true, y_pred_proba),
+            'std': 0.0,
+            'ci_lower': 0.0,
+            'ci_upper': 1.0,
+            'ci_width': 1.0,
+            'includes_0.5': True,
+            'is_significant': False
+        }
     
     lower = np.percentile(aucs, (1 - ci) / 2 * 100)
     upper = np.percentile(aucs, (1 + ci) / 2 * 100)
@@ -145,7 +116,6 @@ def bootstrap_confidence_interval(y_true, y_pred_proba, n_iterations=1000, ci=0.
         'includes_0.5': lower < 0.5 < upper,
         'is_significant': lower > 0.5
     }
-
 
 def test_calibration(y_true, y_pred_proba, n_bins=10):
     """

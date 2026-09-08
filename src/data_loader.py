@@ -5,6 +5,7 @@ Fetches and caches all required data for the Factor Exposure Sentinel project:
 - Fama-French 5 factors (daily) from local CSV
 - ETF adjusted close prices from Yahoo Finance
 - VIX (volatility index) from Yahoo Finance
+- FRED macroeconomic data (yield curve, credit spreads)
 
 All data is aligned to a daily frequency, with factors already converted to decimals.
 Caching is used to avoid repeated downloads and heavy CSV parsing.
@@ -14,6 +15,9 @@ import pandas as pd
 import yfinance as yf
 from pathlib import Path
 import logging
+import os
+from dotenv import load_dotenv
+import pandas_datareader.data as web
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -162,10 +166,66 @@ def fetch_vix(start_date="2010-01-01", end_date="2026-06-30", use_cache=True):
     
     return vix_series
 
+
+def fetch_fred_data(series_id: str, start_date: str, end_date: str, use_cache=True):
+    """
+    Fetch FRED data using API key from .env.
+    Returns Series with datetime index.
+    """
+    cache_file = CACHE_DIR / f"fred_{series_id}_{start_date}_{end_date}.parquet"
+    
+    if use_cache and cache_file.exists():
+        logger.info(f"Loading cached FRED {series_id} from {cache_file}")
+        return pd.read_parquet(cache_file)[series_id]
+    
+    try:
+        from dotenv import load_dotenv
+        import os
+        import pandas_datareader.data as web
+        
+        load_dotenv()
+        api_key = os.getenv('FRED_API_KEY')
+        
+        if api_key is None:
+            logger.warning("FRED_API_KEY not found in .env. Skipping FRED data.")
+            return None
+        
+        logger.info(f"Fetching FRED {series_id}...")
+        data = web.DataReader(series_id, 'fred', start_date, end_date, api_key=api_key)
+        
+        if data.empty:
+            logger.warning(f"No data for FRED {series_id}")
+            return None
+        
+        # Ensure single series
+        if isinstance(data, pd.DataFrame):
+            series = data.iloc[:, 0].rename(series_id)
+        else:
+            series = data.rename(series_id)
+        
+        # Forward fill to daily frequency
+        series = series.asfreq('B', method='ffill')
+        
+        # Cache
+        if use_cache:
+            series.to_frame().to_parquet(cache_file)
+            logger.info(f"Cached FRED {series_id} to {cache_file}")
+        
+        return series
+        
+    except ImportError:
+        logger.warning("pandas-datareader not installed. Install: pip install pandas-datareader")
+        return None
+    except Exception as e:
+        logger.warning(f"FRED fetch failed for {series_id}: {e}")
+        return None
+
+
+    
 def fetch_all_data(start_date="2010-01-01", end_date="2026-06-30", use_cache=True):
     """
     Orchestrate fetching of all data sources and return as a dictionary.
-    Aligns all data to daily frequency (forward-fill factors? Actually factors are already daily).
+    Aligns all data to daily frequency.
     """
     logger.info("Fetching all data...")
     
@@ -178,11 +238,27 @@ def fetch_all_data(start_date="2010-01-01", end_date="2026-06-30", use_cache=Tru
     # 3. VIX
     vix = fetch_vix(start_date, end_date, use_cache)
     
+    # 4. FRED macro data
+    fred_series = {
+        'yield_curve': 'T10Y2Y',
+        'credit_spread_bbb': 'BAA10YM',
+    }
+    fred_data = {}
+    for name, series_id in fred_series.items():
+        data = fetch_fred_data(series_id, start_date, end_date, use_cache)
+        if data is not None:
+            fred_data[name] = data
+    
     # Ensure all indices are DateTimeIndex and align to common date range
     common_idx = factors.index.intersection(etf_prices.index).intersection(vix.index)
+    for name in fred_data:
+        common_idx = common_idx.intersection(fred_data[name].index)
+    
     factors = factors.loc[common_idx]
     etf_prices = etf_prices.loc[common_idx]
     vix = vix.loc[common_idx]
+    for name in fred_data:
+        fred_data[name] = fred_data[name].loc[common_idx]
     
     logger.info(f"All data aligned. Shape: {len(common_idx)} rows.")
     
@@ -190,9 +266,9 @@ def fetch_all_data(start_date="2010-01-01", end_date="2026-06-30", use_cache=Tru
         'factors': factors,
         'etf_prices': etf_prices,
         'vix': vix,
+        'fred': fred_data,
         'dates': common_idx
     }
-
 
 # -------------------------------------------------------------------
 #  TEST / STANDALONE EXECUTION

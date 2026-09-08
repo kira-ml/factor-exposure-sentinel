@@ -109,7 +109,8 @@ def main():
         returns[ETF_TICKERS], 
         factors, 
         portfolio_weights,
-        macro_data=vix
+        macro_data=vix,
+        fred_data=data['fred']
     )
     
     # Drop constant features

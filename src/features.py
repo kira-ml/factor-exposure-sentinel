@@ -34,11 +34,11 @@ def rolling_betas(asset_returns: pd.DataFrame,
     
     for i in range(window, len(asset_returns)):
         # Use data up to i-1 (exclude current day)
-        X = factor_returns.iloc[i-window:i-1].values
-        y = asset_returns.iloc[i-window:i-1].values
-        
-        # Need at least window-1 observations
-        if len(X) == window - 1 and not np.any(np.isnan(X)) and not np.any(np.isnan(y)):
+        X = factor_returns.iloc[i-window:i].values
+        y = asset_returns.iloc[i-window:i].values
+
+        # Need exactly window observations
+        if len(X) == window and not np.any(np.isnan(X)) and not np.any(np.isnan(y)):
             model = LinearRegression()
             model.fit(X, y)
             # Average betas across all assets
@@ -97,7 +97,8 @@ def fetch_credit_spread(start_date="2010-01-01", end_date="2024-12-31"):
 def create_features(asset_returns: pd.DataFrame,
                     factor_returns: pd.DataFrame,
                     portfolio_weights: pd.DataFrame,
-                    macro_data: pd.DataFrame = None) -> pd.DataFrame:
+                    macro_data: pd.DataFrame = None,
+                    fred_data: dict = None) -> pd.DataFrame:
     """
     Create all features for the model.
     
@@ -114,6 +115,8 @@ def create_features(asset_returns: pd.DataFrame,
         Portfolio weights
     macro_data : pd.DataFrame, optional
         Macro data with VIX and other indicators
+    fred_data : dict, optional
+        FRED macroeconomic data from data_loader
     
     Returns:
     --------
@@ -163,6 +166,14 @@ def create_features(asset_returns: pd.DataFrame,
         
         # Credit > median (improves precision)
         features['credit_high'] = (features['credit_spread'] > features['credit_spread'].median()).astype(int)
+
+    # 8c. FRED macro features (new)
+    if fred_data is not None:
+        if 'yield_curve' in fred_data and fred_data['yield_curve'] is not None:
+            features['yield_curve'] = fred_data['yield_curve'].reindex(features.index)
+        
+        if 'credit_spread_bbb' in fred_data and fred_data['credit_spread_bbb'] is not None:
+            features['credit_spread_bbb'] = fred_data['credit_spread_bbb'].reindex(features.index)
 
     # 9. Persistence features (reduce false positives)
     features['fci_high'] = (features['fci'] > features['fci'].rolling(252).quantile(0.85)).astype(int)

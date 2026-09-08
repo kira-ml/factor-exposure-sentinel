@@ -263,7 +263,7 @@ def plot_precision_recall(y_true, y_pred_proba, save=True):
     reported_recall = 0.0741
     
     # CRITICAL FIX: Use the historical event rate (0.0896), not the test set rate (0.054)
-    base_rate = 0.0896  # Hardcoded from your full dataset
+    base_rate = y_true.mean()
     
     fig, ax = plt.subplots(figsize=(7, 5))
 
