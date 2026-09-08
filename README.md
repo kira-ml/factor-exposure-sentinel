@@ -15,7 +15,7 @@ Traditional portfolio risk systems monitor asset-level concentration (single-nam
 
 This project develops a rigorous, reproducible machine learning framework to detect emerging factor overconcentration in multi-asset portfolios before it translates into catastrophic losses. The problem is framed as a supervised binary classification task: given a portfolio's historical returns, current holdings, factor betas, and macro-financial conditions, the model predicts whether a "Factor Concentration Event" (drawdown < -3% over 21 days) will occur.
 
-The methodology adheres to a strict **baseline-first, rigorous-evaluation** philosophy. Simple threshold rules and logistic regression are established before introducing tree-based ensemble methods (Random Forest, XGBoost). Complexity is only adopted if it yields statistically significant (95% CI excludes 0.5) improvements in out-of-sample AUC-ROC. The project utilizes entirely open-source data (Fama-French factors, ETF returns via `yfinance`) to ensure full reproducibility.
+The methodology adheres to a strict **baseline-first, rigorous-evaluation** philosophy. Simple threshold rules and logistic regression are established before introducing tree-based ensemble methods (Random Forest, XGBoost). Complexity is only adopted if it yields statistically significant (95% CI excludes 0.5) improvements in out-of-sample AUC-ROC. The project utilizes entirely open-source data (Fama-French factors, ETF returns via `yfinance`, FRED macroeconomic data) to ensure full reproducibility.
 
 **Empirical Finding:** After rigorous experimentation with proper validation methodology, **no statistically significant predictive relationship was found**. The null hypothesis cannot be rejected with the available data. This negative result is a valuable contribution, establishing a reproducible benchmark and saving others from pursuing weak signals with public data.
 
@@ -53,11 +53,11 @@ Y_{t, h} =
 \end{cases}
 \]
 
-**Key Update:** Based on empirical testing, the attribution threshold (originally >60%) was **removed** because it destroyed the predictive signal. The optimal drawdown threshold of **-3%** was validated through grid search (validation AUC 0.7528, p < 0.001).
+**Key Update:** Based on empirical testing, the attribution threshold (originally >60%) was **removed** because it destroyed the predictive signal. The optimal drawdown threshold of **-3%** was validated through grid search.
 
 - **Prediction Horizon:** \( h = 21 \) trading days (1 month)
-- **Data Period:** January 2010 – December 2024 (3,773 trading days)
-- **Total Events:** 338 (8.96% event rate)
+- **Data Period:** January 2010 – December 2024 (3,753 trading days)
+- **Total Events:** 338 (9.01% event rate)
 
 ### 2.2 Features Available at Prediction Time
 
@@ -68,6 +68,7 @@ Y_{t, h} =
 | **FCI Dynamics** | 25-day MA, 20-day/30-day changes | Captures trend and velocity |
 | **Macro/Market** | VIX level, VIX change, VIX volatility, log VIX | Market stress proxies |
 | **Credit Spread** | HYG/LQD ratio, credit_high indicator | Credit market stress |
+| **FRED Macro** | Yield curve (T10Y2Y), Baa-10yr credit spread | Macroeconomic stress proxies |
 | **Persistence Features** | FCI_high, VIX_high, stress_confirm, stress_persistence | Reduces false positives |
 | **Portfolio Volatility** | 60-day rolling volatility | Risk magnitude |
 
@@ -84,6 +85,7 @@ Y_{t, h} =
 | Yahoo Finance (`yfinance`) | ETF Prices (SPY, AGG, GLD, IJS, EFA) | Daily |
 | Yahoo Finance (`yfinance`) | VIX (^VIX) | Daily |
 | Yahoo Finance (`yfinance`) | Credit Spread (HYG/LQD) | Daily |
+| FRED (via `pandas_datareader`) | Yield Curve (T10Y2Y), Baa-10yr Spread (BAA10YM) | Daily |
 
 **Portfolio Construction:** Synthetic multi-asset portfolios constructed from ETFs with equal weights, providing controlled experimentation with known factor tilts and full reproducibility.
 
@@ -125,9 +127,9 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 
 | Split | Period | Purpose | Samples |
 |-------|--------|---------|---------|
-| **Training** | January 2010 – December 2016 | Model training, feature engineering | 1,509 |
-| **Validation** | January 2017 – December 2022 | Threshold tuning, hyperparameter selection | 1,510 |
-| **Test** | January 2023 – December 2024 | **ONE-TIME** final evaluation | 500 (27 events) |
+| **Training** | January 2010 – December 2016 | Model training, feature engineering | 1,497 |
+| **Validation** | January 2017 – December 2022 | Threshold tuning, hyperparameter selection | 1,499 |
+| **Test** | January 2023 – December 2024 | **ONE-TIME** final evaluation | 477 (27 events) |
 
 ### 4.2 Primary Evaluation Metrics
 
@@ -139,7 +141,7 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 
 ### 4.3 Statistical Rigor (Mandatory)
 
-- **Bootstrap Confidence Intervals:** 95% CI for AUC-ROC (1,000 iterations)
+- **Bootstrap Confidence Intervals:** 95% CI for AUC-ROC (1,000 iterations) — **percentile method** used for all sample sizes
 - **Calibration Testing:** Expected Calibration Error (ECE)
 - **Significance Criterion:** CI excludes 0.5 → statistically significant
 - **No Test Set Leakage:** All tuning performed on validation set only
@@ -152,12 +154,12 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 
 | Metric | Value |
 |--------|-------|
-| Total days | 3,773 |
+| Total days | 3,753 |
 | Total events | 338 |
-| Event rate | 8.96% |
+| Event rate | 9.01% |
 | Crisis event rate (COVID-19) | 34.9% |
 | Normal event rate | 8.4% |
-| Crisis/Normal ratio | **4.17x** |
+| Crisis/Normal ratio | **4.15x** |
 | Total clusters | 33 |
 | Largest cluster | 29 events (Jan-Mar 2020) |
 
@@ -167,41 +169,41 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 
 | Feature | Correlation with Target |
 |---------|------------------------|
-| log_vix | 0.0771 |
-| vix_level | 0.0636 |
-| fci_change_30 | 0.0585 |
-| fci_change_20 | 0.0539 |
-| beta_CMA | 0.0418 |
+| log_vix | 0.0766 |
+| vix_level | 0.0630 |
+| fci_change_30 | 0.0584 |
+| fci_change_20 | 0.0538 |
+| beta_CMA | 0.0428 |
 
 **Key Finding:** All feature correlations are < 0.1, indicating very weak individual predictive signal. This explains why ML models struggle to outperform simple rules.
 
 ### 5.3 Model Performance (Test Set — One-Time Evaluation)
 
-| Model | AUC-ROC | 95% CI | Significant? | Precision | Recall | F1 |
-|-------|---------|--------|--------------|-----------|--------|-----|
-| Heuristic (FCI 90%) | 0.5198 | N/A | N/A | 0.0595 | 0.4074 | 0.1038 |
-| Enhanced (FCI+VIX) | 0.4948 | N/A | N/A | 0.0476 | 0.0741 | 0.0580 |
-| Logistic Regression | 0.3478 | [0.2614, 0.4350] | ❌ | 0.0879 | 0.0741 | 0.0800 |
-| Random Forest | 0.2872 | [0.1865, 0.3885] | ❌ | 0.0571 | 0.1481 | 0.0825 |
-| **XGBoost** | **0.4798** | **[0.3795, 0.5805]** | **❌** | **0.1025** | **1.0000** | **0.1862** |
+| Model | Threshold | AUC-ROC | 95% CI | Significant? | Precision | Recall | F1 |
+|-------|-----------|---------|--------|--------------|-----------|--------|-----|
+| Heuristic (FCI 90%) | 90th pct | 0.5115 | N/A | N/A | 0.0598 | 0.4074 | 0.1043 |
+| Enhanced (FCI+VIX) | 90th + VIX>20 | 0.4926 | N/A | N/A | 0.0476 | 0.0741 | 0.0580 |
+| Logistic Regression | 0.09 | 0.3009 | [0.2020, 0.4000] | ❌ | 0.0000 | 0.0000 | 0.0000 |
+| Random Forest | 0.03 | 0.4226 | [0.2935, 0.5503] | ❌ | 0.2143 | 0.0556 | 0.0950 |
+| **XGBoost** | **0.08** | **0.4545** | **[0.3597, 0.5530]** | **❌** | **0.0238** | **0.0370** | **0.0290** |
 
 ### 5.4 Statistical Significance (XGBoost — Best Model)
 
 | Test | Value | Interpretation |
 |------|-------|----------------|
-| Observed AUC | 0.4798 | Below random (0.5) |
-| 95% CI Lower | 0.3795 | Below 0.5 |
-| 95% CI Upper | 0.5805 | Above 0.5 |
+| Observed AUC | 0.4545 | Below random (0.5) |
+| 95% CI Lower | 0.3597 | Below 0.5 |
+| 95% CI Upper | 0.5530 | Above 0.5 |
 | **CI includes 0.5?** | **YES** | **NOT significant** |
-| ECE | 0.0318 | Well-calibrated |
+| ECE | 0.0183 | Well-calibrated |
 | Verdict | WARNING | Not significant (CI includes 0.5) |
 
 ### 5.5 Key Findings
 
-1. **Heuristic rule outperforms ML models:** FCI > 90% (AUC 0.5198) beats XGBoost (AUC 0.4798)
+1. **Heuristic rule outperforms ML models:** FCI > 90% (AUC 0.5115) beats XGBoost (AUC 0.4545)
 2. **No model is statistically significant:** All 95% CIs include 0.5
-3. **XGBoost achieves perfect recall but low precision:** Recall = 1.000, Precision = 0.1025
-4. **Model is well-calibrated but useless:** ECE = 0.0318, but no discriminative power
+3. **Adding FRED macroeconomic data did not improve signal:** Yield curve and credit spread features showed correlations ≤ 0.04
+4. **Model is well-calibrated but useless:** ECE = 0.0183, but no discriminative power
 5. **Null hypothesis cannot be rejected:** The data does not support reliable prediction
 6. **Features are too weak:** All correlations < 0.1
 
@@ -211,12 +213,12 @@ Every significant modeling decision has a clear rationale. Complexity is introdu
 
 | Criterion | Target | Actual | Status |
 |-----------|--------|--------|--------|
-| Outperform threshold baseline | AUC > 0.70 | AUC 0.4798 | ❌ |
-| Statistical significance | CI excludes 0.5 | CI [0.3795, 0.5805] | ❌ |
-| Detect > 60% of events | Recall > 0.6 | Recall 1.000 | ✅ |
-| False positive rate < 30% | FPR < 0.3 | FPR 0.50 | ❌ |
-| Precision > 0.30 | Precision > 0.30 | Precision 0.1025 | ❌ |
-| Calibration | ECE < 0.10 | ECE 0.0318 | ✅ |
+| Outperform threshold baseline | AUC > 0.70 | AUC 0.4545 | ❌ |
+| Statistical significance | CI excludes 0.5 | CI [0.3597, 0.5530] | ❌ |
+| Detect > 60% of events | Recall > 0.6 | Recall 0.0370 | ❌ |
+| False positive rate < 30% | FPR < 0.3 | FPR 0.0176 | ✅ |
+| Precision > 0.30 | Precision > 0.30 | Precision 0.0238 | ❌ |
+| Calibration | ECE < 0.10 | ECE 0.0183 | ✅ |
 
 **Overall Status:** ❌ **Not successful for practical use.** Model does not meet criteria for reliable early warning system.
 
@@ -236,7 +238,7 @@ After rigorous testing with proper validation methodology:
 | Requirement | Current | Needed |
 |-------------|---------|--------|
 | Feature correlation | < 0.1 | > 0.2 |
-| Precision | 0.1025 | > 0.30 |
+| Precision | 0.0238 | > 0.30 |
 | Test events | 27 | 100+ |
 | Data timeframe | 2010-2024 | Extended to 2029+ |
 
@@ -247,6 +249,7 @@ After rigorous testing with proper validation methodology:
 3. **Statistical testing is non-negotiable:** Bootstrap CI revealed noise
 4. **Negative results are valuable:** Save others from pursuing weak signals
 5. **Public data is insufficient:** Proprietary data (flows, positioning) likely required
+6. **Macroeconomic data does not add signal:** FRED yield curve and credit spread features showed no correlation with target
 
 ---
 
@@ -256,11 +259,12 @@ After rigorous testing with proper validation methodology:
 factor-exposure-sentinel/
 ├── README.md                    # This document
 ├── problem_framing.md           # Full research methodology
+├── executive_summary.md         # One-page summary
 ├── requirements.txt             # Python dependencies
 ├── main.py                      # Pipeline orchestrator
 │
 ├── src/                         # Core Python modules
-│   ├── data_loader.py           # Data fetching with caching
+│   ├── data_loader.py           # Data fetching with caching (includes FRED)
 │   ├── target.py                # Target variable definition
 │   ├── features.py              # Feature engineering (validated set)
 │   ├── models.py                # Model factory (LR, RF, XGBoost)
