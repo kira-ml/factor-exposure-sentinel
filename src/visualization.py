@@ -253,41 +253,53 @@ def plot_precision_recall(y_true, y_pred_proba, save=True):
     """
     Figure 6: Precision-Recall (ZOOMED IN for LinkedIn).
     Purpose: Show that high recall = terrible precision (economic cost).
+    
+    DATA-DRIVEN: Uses actual predictions from the model.
+    NO HARDCODED VALUES.
     """
-    from sklearn.metrics import precision_recall_curve
+    from sklearn.metrics import precision_recall_curve, average_precision_score
 
     precision, recall, thresholds = precision_recall_curve(y_true, y_pred_proba)
     
-    # ACTUAL reported metrics (from CSV)
-    reported_precision = 0.0377
-    reported_recall = 0.0741
-    
-    # CRITICAL FIX: Use the historical event rate (0.0896), not the test set rate (0.054)
+    # Calculate metrics from actual predictions
+    ap_score = average_precision_score(y_true, y_pred_proba)
     base_rate = y_true.mean()
+    
+    # Find the optimal point from actual predictions
+    f1_scores = 2 * precision * recall / (precision + recall + 1e-10)
+    best_idx = np.argmax(f1_scores)
+    best_precision = precision[best_idx]
+    best_recall = recall[best_idx]
     
     fig, ax = plt.subplots(figsize=(7, 5))
 
     # 1. The Main Curve
     ax.plot(recall, precision, color='blue', linewidth=2.5, 
-            label='XGBoost (Test Set)')
+            label=f'XGBoost (Test Set)\nAP = {ap_score:.3f}')
 
-    # 2. The "Reported" Point
-    ax.scatter(reported_recall, reported_precision, color='red', s=180, 
+    # 2. The Optimal Point (from actual data)
+    ax.scatter(best_recall, best_precision, color='red', s=180, 
                zorder=6, edgecolor='black', linewidth=1.5,
-               label=f'Reported: P={reported_precision:.3f}, R={reported_recall:.3f}')
+               label=f'Optimal: P={best_precision:.3f}, R={best_recall:.3f}')
     
-    # 3. The Random Baseline (Correct full-sample base rate)
+    # 3. The Random Baseline
     ax.axhline(base_rate, color='gray', linestyle='--', linewidth=1.5, 
                label=f'Random (Base Rate = {base_rate:.3f})')
 
-    # 4. ZOOM IN (Keep the zoom)
+    # 4. ZOOM IN (Keep the zoom for LinkedIn readability)
     ax.set_xlim(0, 0.5)
-    ax.set_ylim(0, 0.2)
+    ax.set_ylim(0, max(best_precision * 2, 0.1))
 
-    # 5. Annotations (Clean, precise, accurate)
-    ax.annotate('1 in 26 alerts is real', 
-                xy=(reported_recall, reported_precision), 
-                xytext=(0.15, 0.10),
+    # 5. Annotations (Data-driven)
+    if best_precision > 0:
+        false_alarms = int(1 / best_precision)
+        annotation_text = f'1 in {false_alarms} alerts is real'
+    else:
+        annotation_text = 'No alerts are correct'
+    
+    ax.annotate(annotation_text, 
+                xy=(best_recall, best_precision), 
+                xytext=(0.15, min(0.15, max(best_precision * 2, 0.1))),
                 arrowprops=dict(facecolor='black', shrink=0.05, width=2, headwidth=8),
                 fontsize=11, fontweight='bold', color='#d62728')
 
@@ -296,14 +308,13 @@ def plot_precision_recall(y_true, y_pred_proba, save=True):
     ax.set_ylabel('Precision', fontsize=12, fontweight='bold')
     ax.set_title('Figure 6: The Tradeoff is Impossible', fontsize=14, fontweight='bold')
     
-    # 7. Legend and Grid (Move legend to bottom right to avoid covering the red dot)
+    # 7. Legend and Grid (Move legend to lower right to avoid covering data)
     ax.legend(loc='lower right', frameon=True, edgecolor='black', fontsize=9)
     ax.grid(True, alpha=0.3, linestyle='--')
 
     if save:
         save_fig(fig, "fig6_precision_recall")
     return fig
-
 
 # ============================================================================
 # MAIN: Generate All Figures
